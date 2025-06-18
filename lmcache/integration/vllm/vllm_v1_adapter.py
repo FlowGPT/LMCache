@@ -117,6 +117,7 @@ class LMCacheLookupServer:
                 result = self.lmcache_engine.lookup(token_ids)
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
+                logger.info("LMCache lookup server: %s and result %d", token_ids, result)
                 # except Exception as e:
                 #    logger.error("Error in LMCache lookup server: %s", e)
                 #    break
@@ -184,6 +185,10 @@ class RequestTracker:
         # Need to check the type of request.block_ids
 
         unfolded_block_ids = []
+
+        logger.info("new_request.block_ids: %s", new_request.block_ids)
+        logger.info("new_request.prompt_token_ids: %s", new_request.prompt_token_ids)
+        logger.info("num_tokens_to_compute: %d", num_tokens_to_compute)
 
         if not isinstance(new_request.block_ids[0], list):
             unfolded_block_ids = new_request.block_ids.copy()
@@ -264,6 +269,7 @@ class ReqMeta:
         # 1. has already been saved before (num_saved_tokens > 0)
         # 2. number of unsaved tokens is not reached the chunk boundary
         skip_leading_tokens = tracker.num_saved_tokens
+        logger.info("skip_leading_tokens: %d", skip_leading_tokens)
         chunk_boundary = (
             cdiv(tracker.num_saved_tokens + 1, lmcache_chunk_size) * lmcache_chunk_size
         )
@@ -285,6 +291,7 @@ class ReqMeta:
         # If we need to save, update the number of saved tokens
         if not skip_save:
             tracker.num_saved_tokens = num_tokens_to_save
+            logger.info("num_tokens_to_save: %d chunk_size %d", num_tokens_to_save,lmcache_chunk_size)
         save_spec = SaveSpec(skip_leading_tokens, not skip_save)
 
         # Calculate the token ids and slot mappings for load and save
@@ -313,14 +320,16 @@ class ReqMeta:
         )
 
         slot_mapping = slot_mapping.flatten()[: len(token_ids)]
+        logger.info("slot_mapping: %s and len %d", slot_mapping, len(slot_mapping))
         assert slot_mapping.dtype == torch.long  # TODO: this could be removed
 
         # For load operation: check whether the request is scheduled to load
         if load_spec is not None and load_spec.can_load:
             logger.debug(
-                "Scheduled to load %d tokens for request %s",
+                "Scheduled to load %d tokens for request %s, vllm_cached_tokens %d",
                 load_spec.lmcache_cached_tokens,
                 tracker.req_id,
+                load_spec.vllm_cached_tokens,
             )
         else:
             # Do not load if not in `can_load` state
@@ -332,6 +341,31 @@ class ReqMeta:
             slot_mapping=slot_mapping,
             save_spec=save_spec,
             load_spec=load_spec,
+        )
+    def __str__(self) -> str:
+        """Return a string representation of the ReqMeta object, with detailed save_spec and load_spec."""
+        def spec_to_str(spec):
+            if spec is None:
+                return "None"
+            if isinstance(spec, SaveSpec):
+                return (
+                    f"SaveSpec(skip_leading_tokens={spec.skip_leading_tokens}, "
+                    f"can_save={spec.can_save})"
+                )
+            if isinstance(spec, LoadSpec):
+                return (
+                    f"LoadSpec(vllm_cached_tokens={spec.vllm_cached_tokens}, "
+                    f"lmcache_cached_tokens={spec.lmcache_cached_tokens}, "
+                    f"can_load={spec.can_load})"
+                )
+            return str(spec)
+
+        return (
+            f"ReqMeta(req_id={self.req_id}, "
+            f"token_ids={self.token_ids.tolist()}, "
+            f"slot_mapping={self.slot_mapping.tolist()}, "
+            f"save_spec={spec_to_str(self.save_spec)}, "
+            f"load_spec={spec_to_str(self.load_spec)})"
         )
 
 
@@ -349,6 +383,7 @@ class LMCacheConnectorMetadata(KVConnectorMetadata):
             req_meta (ReqMeta): the request metadata.
         """
         self.requests.append(req_meta)
+        logger.info("Added request %s to metadata", req_meta)
 
 
 class LMCacheConnectorV1Impl:
@@ -371,6 +406,7 @@ class LMCacheConnectorV1Impl:
                 vllm_config.scheduler_config,
             )
             self.use_layerwise = isinstance(self.lmcache_engine, LayerwiseLMCacheEngine)
+            logger.info(f'Using LMCacheEngine {type(self.lmcache_engine)}')
 
             # NOTE: Only create the KV lookup API server on worker rank 0
             # when there are multiple workers
@@ -379,6 +415,7 @@ class LMCacheConnectorV1Impl:
                 self.lookup_server = LMCacheLookupServer(
                     self.lmcache_engine, role, is_tp, vllm_config
                 )
+                logger.info("Starting LMCacheLookupServer")
 
         self.kv_caches: dict[str, torch.Tensor] = {}
 
@@ -443,6 +480,7 @@ class LMCacheConnectorV1Impl:
 
         if len(self.kv_caches) == 0:
             self._init_kv_caches_from_forward_context(forward_context)
+            logger.info("Initialized kv_caches: %s", self.kv_caches)
 
         metadata = self._parent._get_connector_metadata()
         assert isinstance(metadata, LMCacheConnectorMetadata)
@@ -474,6 +512,7 @@ class LMCacheConnectorV1Impl:
                 * self._lmcache_chunk_size
             )
             token_mask[:masked_token_count] = False
+            logger.info("load masked_token_count: %d", masked_token_count)
 
             if self.skip_last_n_tokens > 0:
                 tokens = tokens[: -self.skip_last_n_tokens]
@@ -506,6 +545,8 @@ class LMCacheConnectorV1Impl:
                     - request.load_spec.vllm_cached_tokens
                     - self.skip_last_n_tokens
                 )
+                logger.info("Retrieved %d tokens and expected %d tokens for request %s",
+                            num_retrieved_tokens, num_expected_tokens, request.req_id)
                 if num_retrieved_tokens < num_expected_tokens:
                     logger.error(
                         "The number of retrieved tokens is less than the "
@@ -778,6 +819,10 @@ class LMCacheConnectorV1Impl:
         if num_external_tokens == 0:
             # No need to load anything
             self.load_specs[request.request_id].can_load = False
+            logger.info(
+                "Reqid: %s, No need to load anything from LMCache",
+                request.request_id,
+            )
             return
 
         assert (

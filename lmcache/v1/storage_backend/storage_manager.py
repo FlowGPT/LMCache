@@ -88,6 +88,7 @@ class StorageManager:
                 layerwise,
             )
         )
+        logger.info(f"Storage backends: {[str(backend) for backend in self.storage_backends.values()]}")
         self.local_cpu_backend = self.storage_backends["LocalCPUBackend"]
         self.prefetch_tasks: Dict[CacheEngineKey, Future] = {}
         self.put_tasks: Dict[str, Dict[CacheEngineKey, Tuple[Future, MemoryObj]]] = {}
@@ -206,6 +207,7 @@ class StorageManager:
             # NOTE(Jiayi): bypass the allocator for now
             memory_obj = backend.get_blocking(key)
             if memory_obj is not None:
+                logger.info(f"Getting {key} from {backend_name}")
                 if backend_name != "LocalCPUBackend":
                     local_cpu_backend = self.storage_backends["LocalCPUBackend"]
                     assert isinstance(local_cpu_backend, LocalCPUBackend)

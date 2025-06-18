@@ -215,6 +215,7 @@ def init_lmcache_engine(
                 dtype=kv_dtype,
                 device=device,
             )
+    logger.info(f"vllm gpu connector %s: {type(vllm_gpu_connector)}")
     engine = LMCacheEngineBuilder.get_or_create(
         ENGINE_NAME, config, metadata, vllm_gpu_connector, use_layerwise
     )

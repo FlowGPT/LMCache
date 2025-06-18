@@ -106,6 +106,7 @@ class LMCacheEngine:
         self.lmcache_worker: Optional[LMCacheWorker] = None
         if self.config.enable_controller:
             self.lmcache_worker = LMCacheWorker(config, metadata, self)
+            logger.info("Starting LMCacheWorker")
 
         self.use_distributed_storage_manager = False
         if config.enable_nixl:
@@ -336,6 +337,9 @@ class LMCacheEngine:
                     )
                     memory_obj = future_memory_obj.result()
                 if memory_obj is None:
+                    logger.warning(
+                        f"Failed to retrieve the KV cache for key {key}."
+                    )
                     break
 
             ret_mask[start:end] = True
@@ -372,6 +376,7 @@ class LMCacheEngine:
         """
         for start, end, key in self.token_database.process_tokens(tokens, mask):
             assert isinstance(key, CacheEngineKey)
+            logger.info(f"Prefetching {key}")
             self.storage_manager.prefetch(key)
 
     # TODO(Jiayi): Currently, search_range is only used for testing.
@@ -789,6 +794,7 @@ class LMCacheEngineBuilder:
             # HACK(Jiayi): Merge two types of engine into one in the future
             engine: Union[LayerwiseLMCacheEngine, LMCacheEngine]
             if use_layerwise_engine:
+                logger.info("Using layerwise engine")
                 engine = LayerwiseLMCacheEngine(
                     config,
                     metadata,
@@ -797,6 +803,7 @@ class LMCacheEngineBuilder:
                     gpu_connector,
                 )
             else:
+                logger.info("Using normal engine")
                 engine = LMCacheEngine(
                     config,
                     metadata,

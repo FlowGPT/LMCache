@@ -89,6 +89,7 @@ class LocalDiskBackend(StorageBackendInterface):
 
     def contains(self, key: CacheEngineKey, pin: bool = False) -> bool:
         with self.disk_lock:
+            logger.debug(f"Checking if key {key} exists in local disk cache")
             if key not in self.dict:
                 return False
             if pin:
@@ -133,6 +134,7 @@ class LocalDiskBackend(StorageBackendInterface):
         self.usage -= size
         self.stats_monitor.update_local_storage_usage(self.usage)
         os.remove(path)
+        logger.debug(f"Removed key {key} from local disk cache")
 
         # push kv evict msg
         if self.lmcache_worker is not None:
@@ -318,8 +320,12 @@ class LocalDiskBackend(StorageBackendInterface):
             logger.debug("Memory allocation failed during async disk load.")
             return None
         buffer = memory_obj.byte_array
-        with open(path, "rb") as f:
-            f.readinto(buffer)
+        try:
+            with open(path, "rb") as f:
+                f.readinto(buffer)
+        except FileNotFoundError:
+            logger.error(f"File not found: {path}")
+            return None
         return memory_obj
 
     @_lmcache_nvtx_annotate
