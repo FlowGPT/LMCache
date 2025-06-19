@@ -207,7 +207,7 @@ class StorageManager:
             # NOTE(Jiayi): bypass the allocator for now
             memory_obj = backend.get_blocking(key)
             if memory_obj is not None:
-                logger.info(f"Getting {key} from {backend_name}")
+                logger.info(f"Hitting {key.chunk_hash} from {backend_name}")
                 if backend_name != "LocalCPUBackend":
                     local_cpu_backend = self.storage_backends["LocalCPUBackend"]
                     assert isinstance(local_cpu_backend, LocalCPUBackend)

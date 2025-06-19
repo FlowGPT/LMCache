@@ -61,11 +61,15 @@ class LocalDiskBackend(StorageBackendInterface):
         self.disk_lock = threading.Lock()
         assert config.local_disk is not None
         self.path: str = config.local_disk
+        node_id = os.getenv("LM_CACHE_NODE_ID", "0")
+        self.path = os.path.join(self.path, "lmcache_storage_" + node_id)
         if not os.path.exists(self.path):
             os.makedirs(self.path)
             logger.info(f"Created local disk cache directory: {self.path}")
 
         self.lookup_server = lookup_server
+        if self.lookup_server is not None:
+            logger.info("using lookup server for local disk cache")
 
         # Initialize the evictor
         self.evictor = LRUEvictor(max_cache_size=config.max_local_disk_size)
@@ -84,9 +88,12 @@ class LocalDiskBackend(StorageBackendInterface):
     def _key_to_path(
         self,
         key: CacheEngineKey,
+        temp: bool = False,
     ) -> str:
-        return os.path.join(self.path, key.to_string().replace("/", "-") + ".pt")
-
+        path =os.path.join(self.path, key.to_string().replace("/", "-") + ".pt")
+        if temp:
+            path = path.replace(".pt", ".tmp")
+        return path
     def contains(self, key: CacheEngineKey, pin: bool = False) -> bool:
         with self.disk_lock:
             logger.debug(f"Checking if key {key} exists in local disk cache")
@@ -152,6 +159,7 @@ class LocalDiskBackend(StorageBackendInterface):
         with self.disk_lock:
             # Need to do reinsert to update cache recency
             if key in self.dict:
+                logger.warning(f"Key {key} already exists in local disk cache")
                 self.dict.pop(key)
                 has_stored = True
 
@@ -267,13 +275,15 @@ class LocalDiskBackend(StorageBackendInterface):
         assert kv_chunk is not None
         byte_array = memory_obj.byte_array
         path = self._key_to_path(key)
+        tmp_path = self._key_to_path(key, temp=True)
 
         size = len(byte_array)
         self.usage += size
         self.stats_monitor.update_local_storage_usage(self.usage)
 
-        async with aiofiles.open(path, "wb") as f:
+        async with aiofiles.open(tmp_path, "wb") as f:
             await f.write(byte_array)
+        os.rename(tmp_path, path)
         logger.info(f"Saved disk {path} with size {size} bytes")
         self.insert_key(key, memory_obj)
 
@@ -354,3 +364,8 @@ class LocalDiskBackend(StorageBackendInterface):
             self.disk_lock.acquire()
             self.lookup_server.batched_remove(list(self.dict.keys()))
             self.disk_lock.release()
+
+def filter_files_by_extension(directory):
+    all_files = os.listdir(directory)
+    filtered_files = [os.path.join(directory, file) for file in all_files if file.endswith(".pt")]
+    return filtered_files

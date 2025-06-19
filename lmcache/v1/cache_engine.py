@@ -267,6 +267,7 @@ class LMCacheEngine:
             # Allocate the memory object
             num_tokens = end - start
             kv_shape = self.gpu_connector.get_shape(num_tokens)
+            logger.info("store tokens %d kv_shape %s", num_tokens, kv_shape)
             kv_dtype = self.metadata.kv_dtype
             memory_obj = self.storage_manager.allocate(kv_shape, kv_dtype)
             if memory_obj is None:
@@ -325,6 +326,9 @@ class LMCacheEngine:
         ret_mask = torch.zeros_like(tokens, dtype=torch.bool, device="cpu")
         for start, end, key in self.token_database.process_tokens(tokens, mask):
             assert isinstance(key, CacheEngineKey)
+            num_tokens = end - start
+            kv_shape = self.gpu_connector.get_shape(num_tokens)
+            logger.info("retrieve tokens %d kv_shape %s", num_tokens, kv_shape)
 
             # Get the memory object from the storage backend
             memory_obj = self.storage_manager.get(key)
