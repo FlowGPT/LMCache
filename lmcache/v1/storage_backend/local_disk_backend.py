@@ -274,7 +274,7 @@ class LocalDiskBackend(StorageBackendInterface):
 
         async with aiofiles.open(path, "wb") as f:
             await f.write(byte_array)
-
+        logger.info(f"Saved disk {path} with size {size} bytes")
         self.insert_key(key, memory_obj)
 
         memory_obj.ref_count_down()
@@ -323,6 +323,7 @@ class LocalDiskBackend(StorageBackendInterface):
         try:
             with open(path, "rb") as f:
                 f.readinto(buffer)
+            logger.info(f"Loaded disk {path}")
         except FileNotFoundError:
             logger.error(f"File not found: {path}")
             return None
