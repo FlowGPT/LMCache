@@ -269,7 +269,7 @@ class ReqMeta:
         # 1. has already been saved before (num_saved_tokens > 0)
         # 2. number of unsaved tokens is not reached the chunk boundary
         skip_leading_tokens = tracker.num_saved_tokens
-        logger.info("skip_leading_tokens: %d", skip_leading_tokens)
+        #logger.info("skip_leading_tokens: %d", skip_leading_tokens)
         chunk_boundary = (
             cdiv(tracker.num_saved_tokens + 1, lmcache_chunk_size) * lmcache_chunk_size
         )
@@ -480,7 +480,13 @@ class LMCacheConnectorV1Impl:
 
         if len(self.kv_caches) == 0:
             self._init_kv_caches_from_forward_context(forward_context)
-            logger.info("Initialized kv_caches: %s", self.kv_caches)
+            logger.info("Initialized kv_caches")
+            for layer_name, kv_cache in self.kv_caches.items():
+                logger.info(
+                    "KV cache for layer %s: %s",
+                    layer_name,
+                    kv_cache.shape if isinstance(kv_cache, torch.Tensor) else kv_cache,
+                )
 
         metadata = self._parent._get_connector_metadata()
         assert isinstance(metadata, LMCacheConnectorMetadata)
