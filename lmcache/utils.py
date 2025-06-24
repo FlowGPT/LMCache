@@ -60,7 +60,7 @@ TORCH_DTYPE_TO_STR_DTYPE = {
     torch.float8_e5m2: "fp8_e5m2",
 }
 
-
+        
 @dataclass(order=True)
 class CacheEngineKey:
     fmt: str
@@ -68,6 +68,7 @@ class CacheEngineKey:
     world_size: int
     worker_id: int
     chunk_hash: str
+    shape:torch.Size = None
 
     def __hash__(self):
         return hash(
@@ -142,6 +143,39 @@ class CacheEngineKey:
             world_size=d["world_size"],
             worker_id=d["worker_id"],
             chunk_hash=d["chunk_hash"],
+        )
+
+@dataclass(order=True)
+class CacheEngineOuterKey:
+    fmt: str
+    model_name: str
+    world_size: int
+    worker_id: int
+    chunk_hash: str
+    request_id: str
+
+    def __hash__(self):
+        return hash(
+            (
+                self.fmt,
+                self.model_name,
+                self.world_size,
+                self.worker_id,
+                self.chunk_hash,
+                self.request_id
+            )
+        )
+    
+    @staticmethod
+    def from_CacheEngineKey(key:CacheEngineKey,request_id):
+        """Create a CacheEngineOuterKey from a CacheEngineKey and a request_id"""
+        return CacheEngineOuterKey(
+            fmt=key.fmt,
+            model_name=key.model_name,
+            world_size=key.world_size,
+            worker_id=key.worker_id,
+            chunk_hash=key.chunk_hash,
+            request_id=request_id
         )
 
 

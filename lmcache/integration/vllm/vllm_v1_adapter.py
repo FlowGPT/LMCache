@@ -76,9 +76,11 @@ class LMCacheLookupClient:
             bind=False,
         )
 
-    def lookup(self, token_ids: torch.Tensor) -> int:
+    def lookup(self, token_ids: torch.Tensor, request_id: str = "default") -> int:
+        # 先发送request_id，再发送token_ids
+        request_id_bytes = request_id.encode("utf-8")
         request = self.encoder.encode(token_ids)
-        self.socket.send_multipart(request, copy=False)
+        self.socket.send_multipart([request_id_bytes] + request, copy=False)
         resp = self.socket.recv()
         result = int.from_bytes(resp, "big")
         return result
@@ -110,14 +112,14 @@ class LMCacheLookupServer:
 
         def process_request():
             while self.running:
-                # try:
-                # request = self.socket.recv()
+                # frames[0] 是 request_id，frames[1:] 是 token_ids
                 frames = self.socket.recv_multipart(copy=False)
-                token_ids = self.decoder.decode(frames)
+                request_id = frames[0].decode("utf-8")
+                token_ids = self.decoder.decode(frames[1:])
                 result = self.lmcache_engine.lookup(token_ids)
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
-                logger.info("LMCache lookup server: %s and result %d", token_ids, result)
+                logger.info("LMCache lookup server: request_id=%s, tokens=%s, result=%d", request_id, token_ids, result)
                 # except Exception as e:
                 #    logger.error("Error in LMCache lookup server: %s", e)
                 #    break
@@ -335,6 +337,8 @@ class ReqMeta:
             # Do not load if not in `can_load` state
             load_spec = None
 
+        logger.info(f"save_spec {save_spec} and load_spec {load_spec}")
+        
         return ReqMeta(
             req_id=tracker.req_id,
             token_ids=token_ids,
@@ -398,6 +402,7 @@ class LMCacheConnectorV1Impl:
         is_tp = vllm_config.parallel_config.tensor_parallel_size > 1
         if role == KVConnectorRole.SCHEDULER:
             self.lookup_client = LMCacheLookupClient(role, is_tp, vllm_config)
+            logger.info("Starting LMCacheLookupClient in scheduler process")
         else:
             self.lmcache_engine = init_lmcache_engine(
                 vllm_config.model_config,
@@ -775,10 +780,10 @@ class LMCacheConnectorV1Impl:
         token_ids = torch.tensor(request.prompt_token_ids)
         if self.skip_last_n_tokens > 0:
             num_external_hit_tokens = self.lookup_client.lookup(
-                token_ids[: -self.skip_last_n_tokens]
+                token_ids[: -self.skip_last_n_tokens], request.request_id
             )
         else:
-            num_external_hit_tokens = self.lookup_client.lookup(token_ids)
+            num_external_hit_tokens = self.lookup_client.lookup(token_ids,request.request_id)
 
         # When prompt length is divisible by the block size and all
         # blocks are cached, we need to recompute the last token.
@@ -790,10 +795,11 @@ class LMCacheConnectorV1Impl:
         need_to_allocate = num_external_hit_tokens - num_computed_tokens
 
         logger.info(
-            "Reqid: %s, Total tokens %d, LMCache hit tokens: %d, need to load: %d",
+            "Reqid: %s, Total tokens %d, LMCache hit tokens: %d, num_computed_tokens: %d,  need to load: %d",
             request.request_id,
             request.num_tokens,
             num_external_hit_tokens,
+            num_computed_tokens,
             need_to_allocate,
         )
 

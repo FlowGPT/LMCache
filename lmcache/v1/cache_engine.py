@@ -387,6 +387,7 @@ class LMCacheEngine:
     def lookup(
         self,
         tokens: Union[torch.Tensor, List[int]],
+        requst_id: str = None,
         search_range: Optional[List[str]] = None,
         pin: bool = False,
     ) -> int:
@@ -411,6 +412,9 @@ class LMCacheEngine:
 
         for start, end, key in self.token_database.process_tokens(tokens):
             assert isinstance(key, CacheEngineKey)
+            kv_shape = self.gpu_connector.get_shape(end - start)
+            key.shape = kv_shape
+
             if search_local:
                 if self.storage_manager.contains(key, search_range, pin):
                     # found in storage manager, no need to search p2p
@@ -716,6 +720,7 @@ class LayerwiseLMCacheEngine(LMCacheEngine):
     def lookup(
         self,
         tokens: Union[torch.Tensor, List[int]],
+        requst_id: str = None,
         search_range: Optional[List[str]] = None,
         pin: bool = False,
     ) -> int:

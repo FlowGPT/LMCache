@@ -207,7 +207,7 @@ class StorageManager:
             # NOTE(Jiayi): bypass the allocator for now
             memory_obj = backend.get_blocking(key)
             if memory_obj is not None:
-                logger.info(f"Hitting {key.chunk_hash} from {backend_name}")
+                logger.info(f"hitting {key.chunk_hash} from {backend_name}")
                 if backend_name != "LocalCPUBackend":
                     local_cpu_backend = self.storage_backends["LocalCPUBackend"]
                     assert isinstance(local_cpu_backend, LocalCPUBackend)
@@ -345,6 +345,12 @@ class StorageManager:
                 return True
 
         return False
+    
+    def contains_and_search_outer(self,key: CacheEngineKey, request_id: str) -> bool:
+        for backend_name, backend in self.storage_backends.items():
+            if backend_name == "LocalDiskBackend":
+                
+
 
     def remove(
         self,
