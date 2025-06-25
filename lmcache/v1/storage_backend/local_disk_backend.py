@@ -309,7 +309,7 @@ class LocalDiskBackend(StorageBackendInterface):
         self,
         key: CacheEngineKey,
     ) -> Optional[MemoryObj]:
-        memobj = os.get_blocking(key)
+        memobj = self.get_blocking(key)
         if memobj is not None:
             logger.debug(f"get {key} from self disk cache")
             return memobj
