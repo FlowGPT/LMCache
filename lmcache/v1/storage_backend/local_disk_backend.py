@@ -48,12 +48,12 @@ class LocalDiskBackend(StorageBackendInterface):
     def __init__(
         self,
         config: LMCacheEngineConfig,
-        metadata: LMCacheEngineMetadata,
         loop: asyncio.AbstractEventLoop,
         local_cpu_backend: LocalCPUBackend,
         dst_device: str = "cuda",
         lmcache_worker: Optional["LMCacheWorker"] = None,
         lookup_server: Optional[LookupServerInterface] = None,
+        metadata: LMCacheEngineMetadata=None
     ):
         self.dict: OrderedDict[CacheEngineKey, DiskCacheMetadata] = OrderedDict()
         self.outer_tmp_dict: dict[CacheEngineOuterKey, MemoryObj] = {}

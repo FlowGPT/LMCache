@@ -71,6 +71,7 @@ def CreateStorageBackends(
             dst_device,
             lmcache_worker,
             lookup_server,
+            metadata = metadata
         )
         backend_name = str(local_disk_backend)
         storage_backends[backend_name] = local_disk_backend
