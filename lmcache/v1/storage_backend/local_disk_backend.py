@@ -143,7 +143,7 @@ class LocalDiskBackend(StorageBackendInterface):
         return True
 
     def search_outer_and_cache(self, key:CacheEngineKey, root_dirs, load: bool) -> bool:
-        kv_file_name=os.path.join(key.to_string().replace("/", "-"), ".pt")
+        kv_file_name=os.path.join(key.to_string().replace("/", "-") + ".pt")
         for root_dir in root_dirs:
             kv_file_path = os.path.join(root_dir, kv_file_name)
             logger.debug(f"checking {kv_file_path} exists")

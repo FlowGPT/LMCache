@@ -117,6 +117,7 @@ class LMCacheLookupServer:
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
                 result = self.lmcache_engine.lookup(token_ids,requst_id=request_id,load=True)
+                logger.info(f"match tokens {result}")
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
                 logger.info("LMCache lookup server: request_id=%s, tokens=%s, result=%d", request_id, token_ids, result)
