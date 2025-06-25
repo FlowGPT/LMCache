@@ -72,7 +72,7 @@ class LMCacheLookupClient:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.REQ,  # type: ignore[attr-defined]
+            zmq.PUSH,  # type: ignore[attr-defined]
             bind=False,
         )
 
@@ -103,7 +103,7 @@ class LMCacheLookupServer:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.REP,  # type: ignore[attr-defined]
+            zmq.PULL,  # type: ignore[attr-defined]
             bind=True,
         )
 
