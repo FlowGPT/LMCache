@@ -294,7 +294,7 @@ class LMCacheEngine:
         self,
         tokens: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-        requst_id: str = None,
+        request_id: str = None,
         **kwargs,
     ) -> torch.Tensor:
         """Retrieve the KV caches from the cache engine. And put the retrieved
@@ -327,7 +327,7 @@ class LMCacheEngine:
         ret_mask = torch.zeros_like(tokens, dtype=torch.bool, device="cpu")
         for start, end, key in self.token_database.process_tokens(tokens, mask):
             assert isinstance(key, CacheEngineKey)
-            key.request_id = requst_id
+            key.request_id = request_id
 
             # Get the memory object from the storage backend
             memory_obj = self.storage_manager.get(key)
@@ -368,7 +368,7 @@ class LMCacheEngine:
             f"out of {num_required_tokens} "
             f"out of total {len(tokens)} tokens"
         )
-        self.storage_manager.remove_disk_out_cache(requst_id)
+        self.storage_manager.remove_disk_out_cache(request_id)
         return ret_mask
 
     def prefetch(
