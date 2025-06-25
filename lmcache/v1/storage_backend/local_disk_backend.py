@@ -23,7 +23,6 @@ import shutil
 
 # Third Party
 import aiofiles
-from google_crc32c import exc
 import torch
 
 # First Party
