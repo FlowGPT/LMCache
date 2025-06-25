@@ -113,7 +113,7 @@ class LocalDiskBackend(StorageBackendInterface):
 
     def contains_self_and_outer(self, key:CacheEngineKey, load=False) -> bool:
         with self.disk_lock:
-            logger.debug(f"check or cache if key {key} exists in disk cache, request_id: {request_id}")
+            logger.debug(f"check or load if key {key} exists in outer disk cache")
             if key in self.dict:
                 logger.debug(f"key {key} exists in self cache")
                 return True
