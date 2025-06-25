@@ -81,6 +81,17 @@ class CacheEngineKey:
                 self.chunk_hash,
             )
         )
+    
+    def __eq__(self, value):
+        if not isinstance(value, CacheEngineKey):
+            return False
+        return (
+            self.fmt == value.fmt
+            and self.model_name == value.model_name
+            and self.world_size == value.world_size
+            and self.worker_id == value.worker_id
+            and self.chunk_hash == value.chunk_hash
+        )
 
     def to_string(self):
         return (
