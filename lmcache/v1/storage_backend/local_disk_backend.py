@@ -23,6 +23,7 @@ import shutil
 
 # Third Party
 import aiofiles
+from google_crc32c import exc
 import torch
 
 # First Party
@@ -117,7 +118,7 @@ class LocalDiskBackend(StorageBackendInterface):
             if key in self.dict:
                 logger.debug(f"key {key} exists in self cache")
                 return True
-            root_dirs = filter_files_by_prefix(self.local_disk, self.path_prefix, is_file=False)
+            root_dirs = filter_files_by_prefix(self.local_disk, self.path_prefix, exclude=self.path)
             if len(root_dirs) > 0 :
                 logger.debug(f"search outer cache dirs {root_dirs}")
                 return self.search_outer_and_cache(key, root_dirs, load)
@@ -444,9 +445,9 @@ class LocalDiskBackend(StorageBackendInterface):
                     memobj.ref_count_down()
                     logger.info(f"clear tmp cache {key} with ref count {memobj.get_ref_count()}")
 
-def filter_files_by_prefix(directory, prefix, is_file=True):
+def filter_files_by_prefix(directory, prefix, exclude=""):
     results= []
     for entry in os.scandir(directory):
-        if entry.name.startswith(prefix) and entry.is_file() if is_file else entry.is_dir():
+        if entry.name.startswith(prefix) and entry.is_dir() and entry.path != exclude:
             results.append(entry.path)
     return results

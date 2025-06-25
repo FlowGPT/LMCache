@@ -732,6 +732,7 @@ class LMCacheConnectorV1Impl:
                 save_spec.skip_leading_tokens,
             )
             if skip_leading_tokens == len(token_ids):
+                logger.info(f"all tokens {token_ids} are cached, skip save")
                 continue  # skip this request
             # Align to lmcache chunk size
             skip_leading_tokens = (
@@ -782,7 +783,8 @@ class LMCacheConnectorV1Impl:
         """
         if self.kv_role == "kv_producer":
             return 0
-
+        
+        logger.info("lookup lmcache hit for request %s", request.request_id)
         token_ids = torch.tensor(request.prompt_token_ids)
         if self.skip_last_n_tokens > 0:
             num_external_hit_tokens = self.lookup_client.lookup(
