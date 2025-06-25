@@ -438,7 +438,7 @@ class LocalDiskBackend(StorageBackendInterface):
 
     def clear_tmp_cache(self, request_id: str):
         with self.disk_lock:
-            for key in self.outer_tmp_dict:
+            for key in list(self.outer_tmp_dict):
                 if key.request_id == request_id:
                     memobj = self.outer_tmp_dict.pop(key)
                     memobj.ref_count_down()
