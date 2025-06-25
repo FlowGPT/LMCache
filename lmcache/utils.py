@@ -69,6 +69,7 @@ class CacheEngineKey:
     worker_id: int
     chunk_hash: str
     shape:torch.Size = None
+    request_id: str = None
 
     def __hash__(self):
         return hash(
@@ -166,8 +167,14 @@ class CacheEngineOuterKey:
             )
         )
     
+    def to_string(self):
+        return (
+            f"{self.fmt}@{self.model_name}@{self.world_size}"
+            f"@{self.worker_id}@{self.chunk_hash}@{self.request_id}"
+        )
+    
     @staticmethod
-    def from_CacheEngineKey(key:CacheEngineKey,request_id):
+    def from_CacheEngineKey(key:CacheEngineKey):
         """Create a CacheEngineOuterKey from a CacheEngineKey and a request_id"""
         return CacheEngineOuterKey(
             fmt=key.fmt,
@@ -175,7 +182,7 @@ class CacheEngineOuterKey:
             world_size=key.world_size,
             worker_id=key.worker_id,
             chunk_hash=key.chunk_hash,
-            request_id=request_id
+            request_id=key.request_id
         )
 
 

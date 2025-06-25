@@ -23,12 +23,13 @@ import shutil
 
 # Third Party
 import aiofiles
+from flask import request
 import torch
 
 # First Party
 from lmcache.logging import init_logger
 from lmcache.observability import LMCStatsMonitor
-from lmcache.utils import CacheEngineKey, CacheEngineOuterKey, DiskCacheMetadata, _lmcache_nvtx_annotate, OuterDiskCacheMetadata
+from lmcache.utils import CacheEngineKey, CacheEngineOuterKey, DiskCacheMetadata, _lmcache_nvtx_annotate
 from lmcache.v1.cache_controller.message import KVAdmitMsg, KVEvictMsg
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.config import LMCacheEngineMetadata
@@ -111,10 +112,6 @@ class LocalDiskBackend(StorageBackendInterface):
         if temp:
             path = path.replace(".pt", ".tmp")
         return path
-    
-    def _key_to_outer_path(self, key: CacheEngineOuterKey, root_dir: str):
-        return os.path.join(root_dir, key.to_string().replace("/", "-") + ".pt")
-
         
     def contains(self, key: CacheEngineKey, pin: bool = False) -> bool:
         with self.disk_lock:
@@ -125,7 +122,7 @@ class LocalDiskBackend(StorageBackendInterface):
                 self.dict[key].pin()
             return True
 
-    def contains_self_and_outer(self, key:CacheEngineKey, request_id: str = None, cache=False) -> bool:
+    def contains_self_and_outer(self, key:CacheEngineKey, cache=False) -> bool:
         with self.disk_lock:
             logger.debug(f"check or cache if key {key} exists in disk cache, request_id: {request_id}")
             if key in self.dict:
@@ -133,27 +130,30 @@ class LocalDiskBackend(StorageBackendInterface):
                 return True
             root_dirs = filter_files_by_prefix(self.local_disk, self.path_prefix, is_file=False)
             if len(root_dirs) > 0 :
-                logger.debug(f"found outer cache dirs {root_dirs}")
-                return self.search_outer_and_cache(key, root_dirs, request_id, cache)
+                logger.debug(f"search outer cache dirs {root_dirs}")
+                return self.search_outer_and_cache(key, root_dirs, cache)
             else:
                 logger.debug(f"no outer cache dirs found in {self.local_disk}")
                 return False
 
-    def cache_outer_file(self, key:CacheEngineKey, request_id, path:str):
+    def cache_outer_file(self, key:CacheEngineKey, path:str):
         shape = key.shape
+        request_id= key.request_id
         dtype = self.metadata.kv_dtype
         new_key = CacheEngineOuterKey.from_CacheEngineKey(key, request_id)
-        memobj=self.load_bytes_from_disk(path, dtype=dtype, shape=shape)
-        if memobj is None:
-            logger.error(f"cache {path} of {request_id} fail, memobj is None")
-            return False
         if new_key in self.outer_tmp_dict:
-            logger.warning(f"key {new_key} already exists in outer tmp dict, will overwrite")
-        self.outer_tmp_dict[new_key] = memobj
-        logger.info(f"cache {path} of {request_id} success")
+            logger.warning(f"key {new_key} already exists in outer tmp dict, will add ref count")
+            self.outer_tmp_dict[new_key].ref_count_up()
+        else:
+            memobj=self.load_bytes_from_disk(path, dtype=dtype, shape=shape)
+            if memobj is None:
+                logger.error(f"cache {path} of {request_id} fail, memobj is None")
+                return False
+            self.outer_tmp_dict[new_key] = memobj
+        logger.info(f"cache {path} of {request_id} success and memobj ref count {memobj.get_ref_count()}")
         return True
 
-    def search_outer_and_cache(self, key:CacheEngineKey, root_dirs, request_id, cache: bool) -> bool:
+    def search_outer_and_cache(self, key:CacheEngineKey, root_dirs, cache: bool) -> bool:
         kv_file_name=os.path.join(key.to_string().replace("/", "-"), ".pt")
         for root_dir in root_dirs:
             kv_file_path = os.path.join(root_dir, kv_file_name)
@@ -162,7 +162,7 @@ class LocalDiskBackend(StorageBackendInterface):
                 logger.info(f"found {key} in outer {kv_file_path}")
                 if cache:
                     logger.info(f"try to cache {kv_file_path} to memory")
-                    return self.cache_outer_file(key, request_id, kv_file_path)
+                    return self.cache_outer_file(key, kv_file_path)
                 else:
                     return True
         logger.info(f"not found {key} in outer disk cache")
@@ -319,14 +319,13 @@ class LocalDiskBackend(StorageBackendInterface):
     def get_blocking2(
         self,
         key: CacheEngineKey,
-        request_id: str,
     ) -> Optional[MemoryObj]:
         memobj = os.get_blocking(key)
         if memobj is not None:
             logger.debug(f"get {key} from self disk cache")
             return memobj
         else:
-            outer_key = CacheEngineOuterKey.from_CacheEngineKey(key, request_id)
+            outer_key = CacheEngineOuterKey.from_CacheEngineKey(key)
             if outer_key in self.outer_tmp_dict:
                 logger.debug(f"get {outer_key} from outer disk cache")
                 return self.outer_tmp_dict[outer_key]
@@ -447,6 +446,14 @@ class LocalDiskBackend(StorageBackendInterface):
             self.disk_lock.acquire()
             self.lookup_server.batched_remove(list(self.dict.keys()))
             self.disk_lock.release()
+
+    def clear_tmp_cache(self, request_id: str):
+        with self.disk_lock:
+            for key in self.outer_tmp_dict:
+                if key.request_id == request_id:
+                    memobj = self.outer_tmp_dict.pop(key)
+                    memobj.ref_count_down()
+                    logger.info(f"clear tmp cache {key} with ref count {memobj.get_ref_count()}")
 
 def filter_files_by_prefix(directory, prefix, is_file=True):
     results= []

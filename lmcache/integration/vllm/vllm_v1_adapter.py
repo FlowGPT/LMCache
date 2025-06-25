@@ -80,7 +80,7 @@ class LMCacheLookupClient:
         # 先发送request_id，再发送token_ids
         request_id_bytes = request_id.encode("utf-8")
         request = self.encoder.encode(token_ids)
-        self.socket.send_multipart([request_id_bytes] + request, copy=False)
+        self.socket.send_multipart([request_id_bytes, request], copy=False)
         resp = self.socket.recv()
         result = int.from_bytes(resp, "big")
         return result
@@ -116,7 +116,7 @@ class LMCacheLookupServer:
                 frames = self.socket.recv_multipart(copy=False)
                 request_id = frames[0].decode("utf-8")
                 token_ids = self.decoder.decode(frames[1:])
-                result = self.lmcache_engine.lookup(token_ids)
+                result = self.lmcache_engine.lookup(token_ids,requst_id=request_id,load=True)
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
                 logger.info("LMCache lookup server: request_id=%s, tokens=%s, result=%d", request_id, token_ids, result)
@@ -338,7 +338,7 @@ class ReqMeta:
             load_spec = None
 
         logger.info(f"save_spec {save_spec} and load_spec {load_spec}")
-        
+
         return ReqMeta(
             req_id=tracker.req_id,
             token_ids=token_ids,
@@ -512,6 +512,7 @@ class LMCacheConnectorV1Impl:
                 continue
 
             tokens = request.token_ids
+            request_id = request.req_id
             # TODO: have a pre-allocated buffer to hold the slot_mappings
             slot_mapping = request.slot_mapping.cuda()
             assert len(tokens) == len(slot_mapping)
@@ -547,6 +548,7 @@ class LMCacheConnectorV1Impl:
                     token_mask,
                     kvcaches=kvcaches,
                     slot_mapping=slot_mapping,
+                    request_id=request_id
                 )
 
                 # Check the result
@@ -722,7 +724,7 @@ class LMCacheConnectorV1Impl:
             # should rely on the slip_leading_tokens in save_spec to avoid
             # transmit the already saved tokens again.
             skip_leading_tokens = max(
-                self.lmcache_engine.lookup(token_ids),
+                self.lmcache_engine.lookup(token_ids,request_id=request.req_id),
                 save_spec.skip_leading_tokens,
             )
             if skip_leading_tokens == len(token_ids):

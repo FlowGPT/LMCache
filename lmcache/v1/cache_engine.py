@@ -294,6 +294,7 @@ class LMCacheEngine:
         self,
         tokens: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
+        requst_id: str = None,
         **kwargs,
     ) -> torch.Tensor:
         """Retrieve the KV caches from the cache engine. And put the retrieved
@@ -326,9 +327,7 @@ class LMCacheEngine:
         ret_mask = torch.zeros_like(tokens, dtype=torch.bool, device="cpu")
         for start, end, key in self.token_database.process_tokens(tokens, mask):
             assert isinstance(key, CacheEngineKey)
-            num_tokens = end - start
-            kv_shape = self.gpu_connector.get_shape(num_tokens)
-            logger.info("retrieve tokens %d kv_shape %s", num_tokens, kv_shape)
+            key.request_id = requst_id
 
             # Get the memory object from the storage backend
             memory_obj = self.storage_manager.get(key)
@@ -353,6 +352,7 @@ class LMCacheEngine:
             # For example, disk->gpu is faster than disk->cpu->gpu.
             # RDMA is another example.
             self.gpu_connector.to_gpu(memory_obj, start, end, **kwargs)
+            logger.info(f"retrieved memobj ref count {memory_obj.get_ref_count()}")
             memory_obj.ref_count_down()
 
             # NOTE (ApostaC): This is only for the current implementation:
@@ -368,6 +368,7 @@ class LMCacheEngine:
             f"out of {num_required_tokens} "
             f"out of total {len(tokens)} tokens"
         )
+        self.storage_manager.remove_disk_out_cache(requst_id)
         return ret_mask
 
     def prefetch(
@@ -388,6 +389,7 @@ class LMCacheEngine:
         self,
         tokens: Union[torch.Tensor, List[int]],
         requst_id: str = None,
+        load = False,
         search_range: Optional[List[str]] = None,
         pin: bool = False,
     ) -> int:
@@ -412,11 +414,13 @@ class LMCacheEngine:
 
         for start, end, key in self.token_database.process_tokens(tokens):
             assert isinstance(key, CacheEngineKey)
-            kv_shape = self.gpu_connector.get_shape(end - start)
-            key.shape = kv_shape
+            if requst_id:
+                kv_shape = self.gpu_connector.get_shape(end - start)
+                key.shape = kv_shape
+                key.request_id = requst_id
 
             if search_local:
-                if self.storage_manager.contains(key, search_range, pin):
+                if self.storage_manager.contains(key, search_range, pin,load=load):
                     # found in storage manager, no need to search p2p
                     continue
                 else:

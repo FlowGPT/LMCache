@@ -205,7 +205,11 @@ class StorageManager:
         # Search all backends for blocking get
         for backend_name, backend in self.storage_backends.items():
             # NOTE(Jiayi): bypass the allocator for now
-            memory_obj = backend.get_blocking(key)
+            if backend_name == "LocalDiskBackend" and key.request_id:
+                logger.info(f"get from LocalDiskBackend with request_id {key.request_id}")
+                memory_obj = backend.get_blocking2(key)
+            else:
+                memory_obj = backend.get_blocking(key)
             if memory_obj is not None:
                 logger.info(f"hitting {key.chunk_hash} from {backend_name}")
                 if backend_name != "LocalCPUBackend":
@@ -321,6 +325,7 @@ class StorageManager:
         key: CacheEngineKey,
         search_range: Optional[List[str]] = None,
         pin: bool = False,
+        load: bool = False,
     ) -> bool:
         """
         Check whether the key exists in the storage backend.
@@ -341,17 +346,15 @@ class StorageManager:
             if search_range is not None and backend_name not in search_range:
                 continue
 
+            if key.request_id and backend_name == "LocalDiskBackend":
+                logger.info(f"search outer cache for {key.request_id} and load={load}")
+                return backend.contains_self_and_outer(key,load=load)
+
             if backend.contains(key, pin):
                 return True
 
         return False
-    
-    def contains_and_search_outer(self,key: CacheEngineKey, request_id: str) -> bool:
-        for backend_name, backend in self.storage_backends.items():
-            if backend_name == "LocalDiskBackend":
-                
-
-
+      
     def remove(
         self,
         key: CacheEngineKey,
@@ -380,6 +383,12 @@ class StorageManager:
                 num_removed += backend.remove(key)
 
         return num_removed
+    
+    def remove_disk_out_cache(self, request_id: str):
+        if "LocalDiskBackend" in self.storage_backends:
+            backend = self.storage_backends["LocalDiskBackend"]
+            logger.info(f"clear tmp outer cache for request_id {request_id}")
+            backend.clear_tmp_cache(request_id)
 
     def batched_unpin(
         self,
