@@ -44,16 +44,6 @@ if TYPE_CHECKING:
 
 logger = init_logger(__name__)
 
-
-def _make_key_by_hash4outer(chunk_hash: str, metadata: LMCacheEngineMetadata) -> CacheEngineKey:
-    return CacheEngineKey(
-        metadata.fmt,
-        metadata.model_name,
-        metadata.world_size,
-        metadata.worker_id,
-        chunk_hash,
-    )
-
 class LocalDiskBackend(StorageBackendInterface):
     def __init__(
         self,
@@ -331,7 +321,7 @@ class LocalDiskBackend(StorageBackendInterface):
             else:
                 return None
 
-    def get_non_blocng(
+    def get_non_blocking(
         self,
         key: CacheEngineKey,
     ) -> Optional[Future]:
