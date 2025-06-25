@@ -119,7 +119,7 @@ class LMCacheLookupServer:
                 self.socket.send_string("ACK")  # Acknowledge the request_id
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
-                result = self.lmcache_engine.lookup(token_ids,requst_id=request_id,load=True)
+                result = self.lmcache_engine.lookup(token_ids,request_id=request_id,load=True)
                 logger.info(f"match tokens {result}")
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
