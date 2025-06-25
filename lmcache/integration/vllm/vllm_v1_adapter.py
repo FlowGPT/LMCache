@@ -72,7 +72,7 @@ class LMCacheLookupClient:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.DEALER,  # type: ignore[attr-defined]
+            zmq.REQ,  # type: ignore[attr-defined]
             bind=False,
         )
 
@@ -81,6 +81,7 @@ class LMCacheLookupClient:
         # 先发送request_id，再发送token_ids
         request = self.encoder.encode(token_ids)
         self.socket.send_string(request_id,copy=False)
+        ack = self.socket.recv_string()
         self.socket.send_multipart(request, copy=False)
         resp = self.socket.recv()
         result = int.from_bytes(resp, "big")
@@ -104,7 +105,7 @@ class LMCacheLookupServer:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.ROUTER,  # type: ignore[attr-defined]
+            zmq.REP,  # type: ignore[attr-defined]
             bind=True,
         )
 
@@ -115,6 +116,7 @@ class LMCacheLookupServer:
             while self.running:
                 # frames[0] 是 request_id，frames[1:] 是 token_ids
                 request_id = self.socket.recv_string()
+                self.socket.send_string("ACK")  # Acknowledge the request_id
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
                 result = self.lmcache_engine.lookup(token_ids,requst_id=request_id,load=True)
