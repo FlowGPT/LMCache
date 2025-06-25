@@ -129,7 +129,7 @@ class LocalDiskBackend(StorageBackendInterface):
         shape = key.shape
         request_id= key.request_id
         dtype = self.metadata.kv_dtype
-        new_key = CacheEngineOuterKey.from_CacheEngineKey(key, request_id)
+        new_key = CacheEngineOuterKey.from_CacheEngineKey(key)
         if new_key in self.outer_tmp_dict:
             logger.warning(f"key {new_key} already exists in outer tmp dict, will add ref count")
             self.outer_tmp_dict[new_key].ref_count_up()
