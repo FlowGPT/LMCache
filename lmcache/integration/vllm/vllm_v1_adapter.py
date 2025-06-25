@@ -72,9 +72,10 @@ class LMCacheLookupClient:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.PUSH,  # type: ignore[attr-defined]
+            zmq.DEALER,  # type: ignore[attr-defined]
             bind=False,
         )
+
 
     def lookup(self, token_ids: torch.Tensor, request_id: str = "default") -> int:
         # 先发送request_id，再发送token_ids
@@ -103,7 +104,7 @@ class LMCacheLookupServer:
         self.socket = make_zmq_socket(
             self.ctx,
             socket_path,
-            zmq.PULL,  # type: ignore[attr-defined]
+            zmq.ROUTER,  # type: ignore[attr-defined]
             bind=True,
         )
 
