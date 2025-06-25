@@ -23,7 +23,6 @@ import shutil
 
 # Third Party
 import aiofiles
-from flask import request
 import torch
 
 # First Party

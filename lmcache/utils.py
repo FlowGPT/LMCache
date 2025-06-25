@@ -190,7 +190,7 @@ class CacheEngineOuterKey:
 class LayerCacheEngineKey(CacheEngineKey):
     """A key for the layer cache engine"""
 
-    layer_id: int
+    layer_id: int = None
 
     def __hash__(self):
         return hash(
