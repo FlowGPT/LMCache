@@ -132,14 +132,15 @@ class LocalDiskBackend(StorageBackendInterface):
         new_key = CacheEngineOuterKey.from_CacheEngineKey(key)
         if new_key in self.outer_tmp_dict:
             logger.warning(f"key {new_key} already exists in outer tmp dict, will add ref count")
-            self.outer_tmp_dict[new_key].ref_count_up()
+            memobj = self.outer_tmp_dict[new_key]
+            memobj.ref_count_up()
         else:
             memobj=self.load_bytes_from_disk(path, dtype=dtype, shape=shape)
             if memobj is None:
                 logger.error(f"cache {path} of {request_id} fail, memobj is None")
                 return False
             self.outer_tmp_dict[new_key] = memobj
-        logger.info(f"cache {path} of {request_id} success and memobj ref count {memobj.get_ref_count()}")
+        logger.info(f"cache outer success {path} of {request_id} and memobj ref count {memobj.get_ref_count()}")
         return True
 
     def search_outer_and_cache(self, key:CacheEngineKey, root_dirs, load: bool) -> bool:
@@ -150,7 +151,7 @@ class LocalDiskBackend(StorageBackendInterface):
             if os.path.exists(kv_file_path):
                 logger.info(f"found {key} in outer {kv_file_path}")
                 if load:
-                    logger.info(f"try to cache {kv_file_path} to memory")
+                    logger.info(f"try to cache {kv_file_path} to memory and current outer dict len {len(self.outer_tmp_dict)}")
                     return self.cache_outer_file(key, kv_file_path)
                 else:
                     return True
