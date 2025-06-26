@@ -16,6 +16,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 import threading
+import os
 
 # Third Party
 from vllm.config import VllmConfig
@@ -59,6 +60,8 @@ def get_zmq_rpc_path_lmcache(
         rpc_port = vllm_config.kv_transfer_config.get_from_extra_config(
             "lmcache_rpc_port", 0
         )
+    if "LM_CACHE_NODE_ID" in os.environ:
+        rpc_port = os.environ["LM_CACHE_NODE_ID"]
     logger.debug("Base URL: %s, RPC Port: %s", base_url, rpc_port)
     return f"ipc://{base_url}/lmcache_rpc_port_{rpc_port}"
 
