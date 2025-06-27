@@ -516,6 +516,7 @@ class LMCacheConnectorV1Impl:
         self.layerwise_retrievers = []
         for request in metadata.requests:
             if request.load_spec is None:
+                self.lmcache_engine.remove_disk_out_cache(request.req_id)
                 continue
 
             tokens = request.token_ids

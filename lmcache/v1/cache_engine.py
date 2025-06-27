@@ -368,8 +368,11 @@ class LMCacheEngine:
             f"out of {num_required_tokens} "
             f"out of total {len(tokens)} tokens"
         )
+        self.remove_disk_out_cache(request_id)
+        return ret_mask   
+
+    def remove_disk_out_cache(self, request_id: str):
         self.storage_manager.remove_disk_out_cache(request_id)
-        return ret_mask
 
     def prefetch(
         self,
