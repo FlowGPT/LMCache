@@ -195,8 +195,8 @@ class RequestTracker:
 
         unfolded_block_ids = []
 
-        logger.info("new_request.block_ids: %s", new_request.block_ids)
-        logger.info("new_request.prompt_token_ids: %s", new_request.prompt_token_ids)
+        #logger.info("new_request.block_ids: %s", new_request.block_ids)
+        #logger.info("new_request.prompt_token_ids: %s", new_request.prompt_token_ids)
         logger.info("num_tokens_to_compute: %d", num_tokens_to_compute)
 
         if not isinstance(new_request.block_ids[0], list):
@@ -329,7 +329,7 @@ class ReqMeta:
         )
 
         slot_mapping = slot_mapping.flatten()[: len(token_ids)]
-        logger.info("slot_mapping: %s and len %d", slot_mapping, len(slot_mapping))
+        #logger.info("slot_mapping: %s and len %d", slot_mapping, len(slot_mapping))
         assert slot_mapping.dtype == torch.long  # TODO: this could be removed
 
         # For load operation: check whether the request is scheduled to load
@@ -394,7 +394,7 @@ class LMCacheConnectorMetadata(KVConnectorMetadata):
             req_meta (ReqMeta): the request metadata.
         """
         self.requests.append(req_meta)
-        logger.info("Added request %s to metadata", req_meta)
+        logger.info("Added request %s to metadata", req_meta.req_id)
 
 
 class LMCacheConnectorV1Impl:
