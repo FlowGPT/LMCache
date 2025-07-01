@@ -126,7 +126,7 @@ class LMCacheLookupServer:
                 logger.info(f"match tokens {result}")
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
-                logger.info("LMCache lookup server: request_id=%s, tokens=%s, result=%d", request_id, token_ids, result)
+                logger.info("LMCache lookup server: request_id=%s, tokens len=%s, result=%d", request_id, len(token_ids), result)
                 # except Exception as e:
                 #    logger.error("Error in LMCache lookup server: %s", e)
                 #    break
