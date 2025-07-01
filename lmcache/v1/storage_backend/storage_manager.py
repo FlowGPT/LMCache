@@ -188,6 +188,11 @@ class StorageManager:
         for memory_obj in memory_objs:
             memory_obj.ref_count_down()
 
+    def batch_get_disk(self,key,memobjs):
+        for backend_name, backend in self.storage_backends.items():
+            if backend_name == "LocalDiskBackend":
+                backend.batch_get_parallel(key,memobjs)
+
     def get(self, key: CacheEngineKey) -> Optional[MemoryObj]:
         """
         Blocking function to get the memory object from the storages.

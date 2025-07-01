@@ -22,6 +22,7 @@ import hashlib
 import threading
 
 # Third Party
+from lmcache.v1.memory_management import MemoryObj
 from nvtx import annotate  # type: ignore
 import torch
 
@@ -68,6 +69,15 @@ TORCH_DTYPE_TO_STR_DTYPE = {
     torch.float8_e5m2: "fp8_e5m2",
 }
 
+
+class MemObjectMeta:
+    def __init__(self, start, end, key, memobj):
+        self.start = start
+        self.end = end
+        self.key:CacheEngineKey = key
+        self.memobj:MemoryObj = memobj
+        self.shm = None
+        self.missed = False
 
 @dataclass(order=True)
 class CacheEngineKey:

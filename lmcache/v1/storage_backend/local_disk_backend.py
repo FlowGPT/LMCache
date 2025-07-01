@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, List, Optional
 import asyncio
 import os
 import threading
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import shared_memory
 
 # Third Party
 import aiofiles
@@ -27,7 +29,7 @@ import torch
 # First Party
 from lmcache.logging import init_logger
 from lmcache.observability import LMCStatsMonitor
-from lmcache.utils import CacheEngineKey, DiskCacheMetadata, _lmcache_nvtx_annotate
+from lmcache.utils import CacheEngineKey, DiskCacheMetadata, MemObjectMeta, _lmcache_nvtx_annotate
 from lmcache.v1.cache_controller.message import KVAdmitMsg, KVEvictMsg
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.v1.lookup_server import LookupServerInterface
@@ -77,6 +79,7 @@ class LocalDiskBackend(StorageBackendInterface):
         self.instance_id = config.lmcache_instance_id
         self.stats_monitor = LMCStatsMonitor.GetOrCreate()
         self.usage = 0
+        self.pool = ProcessPoolExecutor(10)
 
     def __str__(self):
         return self.__class__.__name__
@@ -226,6 +229,21 @@ class LocalDiskBackend(StorageBackendInterface):
         )
         return future
 
+
+    def get_batch_parallel(self, moms:List[MemObjectMeta]):
+        self.disk_lock.acquire()
+        for m in moms:
+            if m.key not in self.dict:
+                logger.error(f"no found {m.key.chunk_hash} in local disk cache")
+                m.missed = True
+                continue
+            # Update cache recency
+            self.evictor.update_on_hit(m.key, self.dict)
+            size= len(m.memobj.byte_array)
+            shm = shared_memory.SharedMemory(create=True,size=size)
+
+
+
     def get_blocking(
         self,
         key: CacheEngineKey,
@@ -326,6 +344,9 @@ class LocalDiskBackend(StorageBackendInterface):
         with open(path, "rb") as f:
             f.readinto(buffer)
         return memory_obj
+
+    def load_bytes_from_disk_child():
+        pass
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()

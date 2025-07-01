@@ -416,6 +416,42 @@ class LMCacheEngine:
             f"out of total {len(tokens)} tokens"
         )
         return ret_mask
+    
+    @torch.inference_mode()
+    def retrieve2(
+        self,
+        tokens: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        starts = []
+        ends = []
+        keys = []
+        memory_objs = []
+        
+        if mask is not None:
+            num_required_tokens = torch.sum(mask).item()
+        else:
+            num_required_tokens = len(tokens)
+        monitor_req_id = self.stats_monitor.on_retrieve_request(num_required_tokens)
+
+        ret_mask = torch.zeros_like(tokens, dtype=torch.bool, device="cpu")
+        for start, end, key in self.token_database.process_tokens(tokens, mask):
+            num_tokens = end - start
+            kv_shape = self.gpu_connector.get_shape(num_tokens)
+            kv_dtype = self.metadata.kv_dtype
+            memory_obj = self.storage_manager.allocate(kv_shape, kv_dtype)
+            if memory_obj is None:
+                logger.error(
+                    "Failed to allocate memory for the KV cache.\n"
+                )
+                raise RuntimeError("Failed to allocate memory for the KV cache for load")
+
+            starts.append(start)
+            ends.append(end)
+            keys.append(key)
+            memory_objs.append(memory_obj)
+        
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
