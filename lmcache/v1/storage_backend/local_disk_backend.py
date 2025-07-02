@@ -383,13 +383,12 @@ class LocalDiskBackend(StorageBackendInterface):
 def load_bytes_from_disk_child(shm_name, path):
     try:
         shm = shared_memory.SharedMemory(name=shm_name)
-        mv = memoryview(shm.buf)
         with open(path, "rb") as f:
-            f.readinto(mv)
-        logger.info(f"Loaded bytes from disk: {path} into shared memory: {shm_name}")
-        return True
+            n = f.readinto(shm.buf)
+        logger.info(f"loaded bytes {n} from disk: {path} into shared memory: {shm_name}")
+        return n
     except Exception as e:
         logger.error(f"Failed to load bytes from disk: {e}")
         return False
     finally:
-        mv.release()
+        shm.close()
