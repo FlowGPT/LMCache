@@ -450,6 +450,12 @@ class LMCacheConnectorV1Impl:
         )
         self.current_layer = 0
 
+        lmconfig = self.lmcache_engine.config
+        if lmconfig.local_disk and lmconfig.max_local_disk_size > 0:
+            self.use_disk_cache= True
+            logger.info("Using local disk cache for LMCache")
+
+
     def _init_kv_caches_from_forward_context(self, forward_context: "ForwardContext"):
         for layer_name in forward_context.no_compile_layers:
             attn_layer = forward_context.no_compile_layers[layer_name]
@@ -552,12 +558,20 @@ class LMCacheConnectorV1Impl:
                     next(layerwise_retriever)
                     self.layerwise_retrievers.append(layerwise_retriever)
             else:
-                ret_token_mask = self.lmcache_engine.retrieve(
-                    tokens[:lmcache_cached_tokens],
-                    token_mask[:lmcache_cached_tokens],
-                    kvcaches=kvcaches,
-                    slot_mapping=slot_mapping[:lmcache_cached_tokens],
-                )
+                if self.use_disk_cache:
+                    ret_token_mask = self.lmcache_engine.retrieve4disk(
+                        tokens[:lmcache_cached_tokens],
+                        token_mask[:lmcache_cached_tokens],
+                        kvcaches=kvcaches,
+                        slot_mapping=slot_mapping[:lmcache_cached_tokens],
+                    )
+                else:
+                    ret_token_mask = self.lmcache_engine.retrieve(
+                        tokens[:lmcache_cached_tokens],
+                        token_mask[:lmcache_cached_tokens],
+                        kvcaches=kvcaches,
+                        slot_mapping=slot_mapping[:lmcache_cached_tokens],
+                    )
 
                 # Check the result
                 num_retrieved_tokens = ret_token_mask.sum().item()

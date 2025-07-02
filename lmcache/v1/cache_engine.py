@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Standard
+from concurrent.futures import Future
 from typing import Dict, Generator, List, Optional, Union
 import asyncio
 import multiprocessing
@@ -26,7 +27,7 @@ from lmcache.config import LMCacheEngineMetadata
 from lmcache.logging import init_logger
 from lmcache.observability import LMCacheStatsLogger, LMCStatsMonitor
 from lmcache.usage_context import InitializeUsageContext
-from lmcache.utils import CacheEngineKey, _lmcache_nvtx_annotate
+from lmcache.utils import CacheEngineKey, _lmcache_nvtx_annotate, MemMeta4Disk
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.v1.distributed_server import (
     DistributedServerInterface,
@@ -418,16 +419,30 @@ class LMCacheEngine:
         return ret_mask
     
     @torch.inference_mode()
-    def retrieve2(
+    def retrieve4disk(
         self,
         tokens: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
-        starts = []
-        ends = []
-        keys = []
-        memory_objs = []
+        memobjmetas: List[MemMeta4Disk] = []
+
+        def handle_batch_get_results(future_cache: Dict[Future, MemMeta4Disk]):
+            for f, m in future_cache.items():
+                result = f.result()
+                shm = m.shm
+                if not result:
+                    logger.error(f"Failed to load bytes from disk for {m.key.chunk_hash}")
+                    shm.close()
+                    shm.unlink()
+                    continue
+                mv = memoryview(shm.buf)
+                m.memobj.byte_array[:] = mv[:]
+                mv.release()
+                m.shm.close()
+                m.shm.unlink()
+                m.missed = False
+                logger.info(f"load finished for {m.key.chunk_hash}, pos {m.start} to {m.end}")
         
         if mask is not None:
             num_required_tokens = torch.sum(mask).item()
@@ -447,11 +462,30 @@ class LMCacheEngine:
                 )
                 raise RuntimeError("Failed to allocate memory for the KV cache for load")
 
-            starts.append(start)
-            ends.append(end)
-            keys.append(key)
-            memory_objs.append(memory_obj)
+            memobj_meta=MemMeta4Disk(start,end,key,memory_obj)
+            memobjmetas.append(memobj_meta)
+
+        logger.debug(f"total {len(memobjmetas)} memobj metas to retrieve")
+        futures_cache = self.storage_manager.batch_get_disk(memobjmetas)
+        handle_batch_get_results(futures_cache)
+        for m in memobjmetas:
+            memory_obj = m.memobj
+            if m.missed:
+                logger.error(f"failed to retrieve disk cache for {m.key.chunk_hash} pos {m.start} to {m.end}")
+            else:
+                self.gpu_connector.to_gpu(memory_obj, m.start, m.end, **kwargs)
+                ret_mask[m.start:m.end] = True
+                logger.info(f"passed to gpu finished for {m.key.chunk_hash}, pos {m.start} to {m.end}")
+            memory_obj.ref_count_down()
         
+        retrieved_tokens = torch.sum(ret_mask)
+        self.stats_monitor.on_retrieve_finished(monitor_req_id, retrieved_tokens)
+        logger.debug(
+            f"Retrieved {retrieved_tokens} "
+            f"out of {num_required_tokens} "
+            f"out of total {len(tokens)} tokens"
+        )
+        return ret_mask
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()

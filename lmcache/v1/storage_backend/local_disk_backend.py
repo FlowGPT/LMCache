@@ -15,11 +15,11 @@
 # Standard
 from collections import OrderedDict
 from concurrent.futures import Future
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional,Dict
 import asyncio
 import os
 import threading
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor,Future
 from multiprocessing import shared_memory
 
 # Third Party
@@ -29,7 +29,7 @@ import torch
 # First Party
 from lmcache.logging import init_logger
 from lmcache.observability import LMCStatsMonitor
-from lmcache.utils import CacheEngineKey, DiskCacheMetadata, MemObjectMeta, _lmcache_nvtx_annotate
+from lmcache.utils import CacheEngineKey, DiskCacheMetadata, MemMeta4Disk, _lmcache_nvtx_annotate
 from lmcache.v1.cache_controller.message import KVAdmitMsg, KVEvictMsg
 from lmcache.v1.config import LMCacheEngineConfig
 from lmcache.v1.lookup_server import LookupServerInterface
@@ -79,7 +79,7 @@ class LocalDiskBackend(StorageBackendInterface):
         self.instance_id = config.lmcache_instance_id
         self.stats_monitor = LMCStatsMonitor.GetOrCreate()
         self.usage = 0
-        self.pool = ProcessPoolExecutor(10)
+        self.pool = ProcessPoolExecutor(20)
 
     def __str__(self):
         return self.__class__.__name__
@@ -230,19 +230,27 @@ class LocalDiskBackend(StorageBackendInterface):
         return future
 
 
-    def get_batch_parallel(self, moms:List[MemObjectMeta]):
+    def get_batch_parallel(self, moms:List[MemMeta4Disk]):
+        future_cache:Dict[Future, MemMeta4Disk] ={}
         self.disk_lock.acquire()
         for m in moms:
             if m.key not in self.dict:
                 logger.error(f"no found {m.key.chunk_hash} in local disk cache")
-                m.missed = True
                 continue
+
             # Update cache recency
             self.evictor.update_on_hit(m.key, self.dict)
             size= len(m.memobj.byte_array)
             shm = shared_memory.SharedMemory(create=True,size=size)
-
-
+            diskmeta = self.dict[m.key]
+            future = self.pool.submit(
+                load_bytes_from_disk_child, shm.name, diskmeta.path
+                )
+            m.shm = shm
+            future_cache[future] = m
+            logger.info(f"submit a load task for {m.key.chunk_hash}, pos {m.start} to {m.end}")
+        self.disk_lock.release()
+        return future_cache
 
     def get_blocking(
         self,
@@ -345,9 +353,6 @@ class LocalDiskBackend(StorageBackendInterface):
             f.readinto(buffer)
         return memory_obj
 
-    def load_bytes_from_disk_child():
-        pass
-
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
     def load_disk(
@@ -374,3 +379,17 @@ class LocalDiskBackend(StorageBackendInterface):
             self.disk_lock.acquire()
             self.lookup_server.batched_remove(list(self.dict.keys()))
             self.disk_lock.release()
+
+def load_bytes_from_disk_child(shm_name, path):
+    try:
+        shm = shared_memory.SharedMemory(name=shm_name)
+        mv = memoryview(shm.buf)
+        with open(path, "rb") as f:
+            f.readinto(mv)
+        logger.info(f"Loaded bytes from disk: {path} into shared memory: {shm_name}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to load bytes from disk: {e}")
+        return False
+    finally:
+        mv.release()

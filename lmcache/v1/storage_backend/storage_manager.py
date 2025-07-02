@@ -188,10 +188,14 @@ class StorageManager:
         for memory_obj in memory_objs:
             memory_obj.ref_count_down()
 
-    def batch_get_disk(self,key,memobjs):
+    def batch_get_disk(self,moms):
         for backend_name, backend in self.storage_backends.items():
             if backend_name == "LocalDiskBackend":
-                backend.batch_get_parallel(key,memobjs)
+                return backend.get_batch_parallel(moms)
+        raise RuntimeError(
+            "No LocalDiskBackend found in storage backends. "
+            "Please check your configuration."
+        )
 
     def get(self, key: CacheEngineKey) -> Optional[MemoryObj]:
         """

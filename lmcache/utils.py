@@ -70,14 +70,14 @@ TORCH_DTYPE_TO_STR_DTYPE = {
 }
 
 
-class MemObjectMeta:
+class MemMeta4Disk:
     def __init__(self, start, end, key, memobj):
         self.start = start
         self.end = end
         self.key:CacheEngineKey = key
         self.memobj:MemoryObj = memobj
         self.shm = None
-        self.missed = False
+        self.missed = True
 
 @dataclass(order=True)
 class CacheEngineKey:
