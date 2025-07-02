@@ -436,9 +436,7 @@ class LMCacheEngine:
                     shm.close()
                     shm.unlink()
                     continue
-                mv = memoryview(shm.buf)
-                m.memobj.byte_array[:] = mv[:]
-                mv.release()
+                m.memobj.byte_array[:] = shm.buf[:]
                 m.shm.close()
                 m.shm.unlink()
                 m.missed = False
