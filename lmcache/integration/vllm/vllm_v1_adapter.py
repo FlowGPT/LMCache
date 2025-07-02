@@ -450,10 +450,11 @@ class LMCacheConnectorV1Impl:
         )
         self.current_layer = 0
 
-        lmconfig = self.lmcache_engine.config
-        if lmconfig.local_disk and lmconfig.max_local_disk_size > 0:
-            self.use_disk_cache= True
-            logger.info("Using local disk cache for LMCache")
+        if role == KVConnectorRole.WORKER:
+            lmconfig = self.lmcache_engine.config
+            if lmconfig.local_disk and lmconfig.max_local_disk_size > 0:
+                self.use_disk_cache= True
+                logger.info("Using local disk cache for LMCache")
 
 
     def _init_kv_caches_from_forward_context(self, forward_context: "ForwardContext"):
