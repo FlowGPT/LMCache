@@ -22,7 +22,6 @@ import hashlib
 import threading
 
 # Third Party
-from lmcache.v1.memory_management import MemoryObj
 from nvtx import annotate  # type: ignore
 import torch
 
@@ -75,7 +74,7 @@ class MemMeta4Disk:
         self.start = start
         self.end = end
         self.key:CacheEngineKey = key
-        self.memobj:MemoryObj = memobj
+        self.memobj = memobj
         self.shm = None
         self.missed = True
 
