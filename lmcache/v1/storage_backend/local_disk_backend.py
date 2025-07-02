@@ -382,6 +382,7 @@ class LocalDiskBackend(StorageBackendInterface):
 
 def load_bytes_from_disk_child(shm_name, path):
     try:
+        logger.info("Loading bytes from disk in child process...")
         shm = shared_memory.SharedMemory(name=shm_name)
         with open(path, "rb") as f:
             n = f.readinto(shm.buf)
