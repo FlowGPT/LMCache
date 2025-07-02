@@ -248,7 +248,7 @@ class LocalDiskBackend(StorageBackendInterface):
                 )
             m.shm = shm
             future_cache[future] = m
-            logger.info(f"submit a load task for {m.key.chunk_hash}, pos {m.start} to {m.end}")
+            logger.info(f"submit a load task for {m.key.chunk_hash}, pos {m.start} to {m.end}, expected size {size}")
         self.disk_lock.release()
         return future_cache
 
