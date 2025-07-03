@@ -197,6 +197,14 @@ class StorageManager:
             "Please check your configuration."
         )
 
+    def batch_get_disk_async(self,keys):
+        for backend_name, backend in self.storage_backends.items():
+            if backend_name == "LocalDiskBackend":
+                return backend.get_batch_async(keys)
+        raise RuntimeError(
+            "No LocalDiskBackend found in storage backends. "
+            "Please check your configuration.")
+
     def get(self, key: CacheEngineKey) -> Optional[MemoryObj]:
         """
         Blocking function to get the memory object from the storages.

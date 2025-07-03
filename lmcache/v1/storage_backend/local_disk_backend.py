@@ -179,6 +179,8 @@ class LocalDiskBackend(StorageBackendInterface):
         if put_status == PutStatus.ILLEGAL:
             return None
         # evict caches
+        if len(evict_key) > 0:
+            logger.info("remove files")
         for evict_key in evict_keys:
             self.remove(evict_key)
         if self.lookup_server is not None:
@@ -203,6 +205,15 @@ class LocalDiskBackend(StorageBackendInterface):
             for key, memory_obj in zip(keys, memory_objs, strict=False)
         ]
 
+    def get_batch_async(self,keys:List[CacheEngineKey])-> Optional[Future]:
+        results= {}
+        for index, key in enumerate(keys):
+            f = self.submit_prefetch_task(key)
+            if f is None:
+                logger.error(f"no found {key.chunk_hash} in local disk cache")
+                raise RuntimeError(f"no found {key.chunk_hash} in local disk cache")
+            results[f] = index
+        return results
     def submit_prefetch_task(
         self,
         key: CacheEngineKey,
@@ -228,7 +239,6 @@ class LocalDiskBackend(StorageBackendInterface):
             self.async_load_bytes_from_disk(path, dtype, shape, fmt), self.loop
         )
         return future
-
 
     def get_batch_parallel(self, moms:List[MemMeta4Disk]):
         future_cache:Dict[Future, MemMeta4Disk] ={}

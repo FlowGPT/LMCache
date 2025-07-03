@@ -560,7 +560,7 @@ class LMCacheConnectorV1Impl:
                     self.layerwise_retrievers.append(layerwise_retriever)
             else:
                 if self.use_disk_cache:
-                    ret_token_mask = self.lmcache_engine.retrieve4disk(
+                    ret_token_mask = self.lmcache_engine.retrieve4disk_async(
                         tokens[:lmcache_cached_tokens],
                         token_mask[:lmcache_cached_tokens],
                         kvcaches=kvcaches,

@@ -360,7 +360,7 @@ class TensorMemoryObj(MemoryObj):
         byte_array = (ctypes.c_ubyte * num_bytes).from_address(
             ctypes.addressof(ubyte_ptr.contents)
         )
-        return memoryview(byte_array).cast("B")
+        return memoryview(byte_array)
 
     @property
     def is_pinned(self) -> bool:

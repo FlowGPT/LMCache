@@ -18,6 +18,7 @@ from typing import Dict, Generator, List, Optional, Union
 import asyncio
 import multiprocessing
 import time
+from concurrent.futures import as_completed
 
 # Third Party
 import torch
@@ -418,6 +419,56 @@ class LMCacheEngine:
         )
         return ret_mask
     
+    @torch.inference_mode()
+    def retrieve4disk_async(
+        self,
+        tokens: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        if mask is not None:
+            num_required_tokens = torch.sum(mask).item()
+        else:
+            num_required_tokens = len(tokens)
+        monitor_req_id = self.stats_monitor.on_retrieve_request(num_required_tokens)
+
+        starts = []
+        ends = []
+        keys = []
+        ret_mask = torch.zeros_like(tokens, dtype=torch.bool, device="cpu")
+        for start, end, key in self.token_database.process_tokens(tokens, mask):
+            starts.append(start)
+            ends.append(end)
+            keys.append(key)
+
+        logger.debug(f"total {len(keys)} memobj metas to retrieve")
+        futures_cache:Dict = self.storage_manager.batch_get_disk_async(keys)
+        futures = futures_cache.keys()
+        for future in as_completed(futures):
+            index= futures_cache[future]
+            start=starts[index]
+            ends=ends[index]
+            key=keys[index]
+            memobj = future.result()
+            if memobj is None:
+                logger.error(f"Failed to load bytes from disk for {key.chunk_hash}")
+                raise RuntimeError(f"Failed to load bytes from disk for {key.chunk_hash}")
+
+            logger.info(f"load finished for {key.chunk_hash}, pos {start} to {end}")
+            self.gpu_connector.to_gpu(memobj, start, end, **kwargs)
+            ret_mask[start:end] = True
+            memobj.ref_count_down()
+            logger.info(f"passed to gpu finished for {key.chunk_hash}, pos {start} to {end}")
+
+        retrieved_tokens = torch.sum(ret_mask)
+        self.stats_monitor.on_retrieve_finished(monitor_req_id, retrieved_tokens)
+        logger.debug(
+            f"Retrieved {retrieved_tokens} "
+            f"out of {num_required_tokens} "
+            f"out of total {len(tokens)} tokens"
+        )
+        return ret_mask
+
     @torch.inference_mode()
     def retrieve4disk(
         self,
