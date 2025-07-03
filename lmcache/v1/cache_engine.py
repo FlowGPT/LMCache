@@ -447,7 +447,7 @@ class LMCacheEngine:
         for future in as_completed(futures):
             index= futures_cache[future]
             start=starts[index]
-            ends=ends[index]
+            end=ends[index]
             key=keys[index]
             memobj = future.result()
             if memobj is None:
