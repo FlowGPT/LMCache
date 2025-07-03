@@ -179,7 +179,7 @@ class LocalDiskBackend(StorageBackendInterface):
         if put_status == PutStatus.ILLEGAL:
             return None
         # evict caches
-        if len(evict_key) > 0:
+        if len(evict_keys) > 0:
             logger.info("remove files")
         for evict_key in evict_keys:
             self.remove(evict_key)
