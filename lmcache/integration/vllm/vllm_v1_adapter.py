@@ -450,6 +450,7 @@ class LMCacheConnectorV1Impl:
         )
         self.current_layer = 0
 
+        self.use_disk_cache = False
         if role == KVConnectorRole.WORKER:
             lmconfig = self.lmcache_engine.config
             if lmconfig.local_disk and lmconfig.max_local_disk_size > 0:
