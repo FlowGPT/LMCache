@@ -185,6 +185,7 @@ class LMCacheEngine:
         offload_time = 0.0
         put_time = 0.0
         tot_kv_size = 0
+        tot_phy_size = 0
         t = time.perf_counter()
 
         for start, end, key in self.token_database.process_tokens(tokens, mask):
@@ -208,9 +209,11 @@ class LMCacheEngine:
             keys.append(key)
             memory_objs.append(memory_obj)
             tot_kv_size += memory_obj.get_size()
+            tot_phy_size += memory_obj.get_physical_size()
 
         self.gpu_connector.batched_from_gpu(memory_objs, starts, ends, **kwargs)
         offload_time += time.perf_counter() - t
+        logger.debug("total kv size: %d, total physical size: %d",  tot_kv_size, tot_phy_size)
 
         t = time.perf_counter()
         self.storage_manager.batched_put(keys, memory_objs)

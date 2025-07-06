@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, List, Optional,Dict
 import asyncio
 import os
 import threading
-from concurrent.futures import ProcessPoolExecutor,Future
+from concurrent.futures import ProcessPoolExecutor,Future, wait
 from multiprocessing import shared_memory
 
 # Third Party
@@ -124,7 +124,7 @@ class LocalDiskBackend(StorageBackendInterface):
             else:
                 return False
 
-    async def remove(
+    def remove(
         self,
         key: CacheEngineKey,
     ) -> None:
@@ -135,8 +135,8 @@ class LocalDiskBackend(StorageBackendInterface):
         size = os.path.getsize(path)
         self.usage -= size
         self.stats_monitor.update_local_storage_usage(self.usage)
-        #os.remove(path)
-        await aiofiles.remove(path)
+        os.remove(path)
+        #await aiofiles.remove(path)
 
         # push kv evict msg
         if self.lmcache_worker is not None:
@@ -166,6 +166,28 @@ class LocalDiskBackend(StorageBackendInterface):
                 KVAdmitMsg(self.instance_id, key.worker_id, key.chunk_hash, "disk")
             )
 
+    def update_eviction_and_remove(self,tot_size):
+        with self.disk_lock:
+            evict_keys, put_status = self.evictor.update_on_put(
+                self.dict, tot_size
+            )
+        if put_status == PutStatus.ILLEGAL:
+            raise RuntimeError(
+                f"Put status is illegal, size: {tot_size}, "
+            )
+        paths = [ self.dict[key].path for key in evict_keys]
+        if len(evict_keys) > 0:
+            with self.disk_lock:
+                for key in evict_keys:
+                    self.dict.pop(key)
+            futures = [self.pool.submit(delete_file_child, path) for path in paths]
+            wait(futures)
+            logger.info(f"remove {len(evict_keys)} files from disk cache")
+            if self.lookup_server is not None:
+                self.lookup_server.batched_remove(evict_keys)
+            self.usage -= tot_size
+            self.stats_monitor.update_local_storage_usage(self.usage)
+
     def submit_put_task(
         self,
         key: CacheEngineKey,
@@ -173,29 +195,24 @@ class LocalDiskBackend(StorageBackendInterface):
     ) -> Optional[Future]:
         assert memory_obj.tensor is not None
 
-        # Update cache recency
-        with self.disk_lock:
-            evict_keys, put_status = self.evictor.update_on_put(
-                self.dict, memory_obj.get_physical_size()
-            )
-        if put_status == PutStatus.ILLEGAL:
-            return None
-        # evict caches
-        if len(evict_keys) > 0:
-            logger.info("remove files")
-        for evict_key in evict_keys:
-            #self.remove(evict_key)
-            asyncio.run_coroutine_threadsafe(
-                self.remove(evict_key), self.loop
-            )
-        if self.lookup_server is not None:
-            self.lookup_server.batched_remove(evict_keys)
+        # # Update cache recency
+        # with self.disk_lock:
+        #     evict_keys, put_status = self.evictor.update_on_put(
+        #         self.dict, memory_obj.get_physical_size()
+        #     )
+        # if put_status == PutStatus.ILLEGAL:
+        #     return None
+        # # evict caches
+        # for evict_key in evict_keys:
+        #     self.remove(evict_key)
+        # if self.lookup_server is not None:
+        #     self.lookup_server.batched_remove(evict_keys)
 
         memory_obj.ref_count_up()
 
-        self.disk_lock.acquire()
-        self.put_tasks.append(key)
-        self.disk_lock.release()
+        #self.disk_lock.acquire()
+        #self.put_tasks.append(key)
+        #self.disk_lock.release()
 
         future = asyncio.run_coroutine_threadsafe(
             self.async_save_bytes_to_disk(key, memory_obj), self.loop
@@ -203,12 +220,14 @@ class LocalDiskBackend(StorageBackendInterface):
         return future
 
     def batched_submit_put_task(
-        self, keys: List[CacheEngineKey], memory_objs: List[MemoryObj]
+        self, keys: List[CacheEngineKey], memory_objs: List[MemoryObj], tot_size
     ) -> Optional[List[Future]]:
-        return [
+        self.update_eviction_and_remove(tot_size)
+        futures= [
             self.submit_put_task(key, memory_obj)
             for key, memory_obj in zip(keys, memory_objs, strict=False)
         ]
+        return futures
 
     def get_batch_async(self,keys:List[CacheEngineKey])-> Optional[Future]:
         results= {}
@@ -329,9 +348,9 @@ class LocalDiskBackend(StorageBackendInterface):
 
         memory_obj.ref_count_down()
 
-        self.disk_lock.acquire()
-        self.put_tasks.remove(key)
-        self.disk_lock.release()
+        # self.disk_lock.acquire()
+        # self.put_tasks.remove(key)
+        # self.disk_lock.release()
 
     # TODO(Jiayi): use `bytes_read = await f.readinto(buffer)`
     # for better performance (i.e., fewer copy)
@@ -408,3 +427,7 @@ def load_bytes_from_disk_child(shm_name, path):
         return False
     finally:
         shm.close()
+
+def delete_file_child(path):
+    os.remove(path)
+    return True

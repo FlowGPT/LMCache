@@ -167,6 +167,7 @@ class StorageManager:
         self,
         keys: Sequence[CacheEngineKey],
         memory_objs: List[MemoryObj],
+        tot_size: int = 0,
     ) -> None:
         # FIXME(Jiayi): fix docstring
         """
@@ -183,7 +184,7 @@ class StorageManager:
         for backend in self.storage_backends.values():
             # NOTE: the handling of exists_in_put_tasks
             # is done in the backend
-            backend.batched_submit_put_task(keys, memory_objs)
+            backend.batched_submit_put_task(keys, memory_objs,tot_size)
 
         for memory_obj in memory_objs:
             memory_obj.ref_count_down()

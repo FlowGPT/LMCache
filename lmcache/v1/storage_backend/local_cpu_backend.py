@@ -122,6 +122,7 @@ class LocalCPUBackend(StorageBackendInterface):
         self,
         keys: List[CacheEngineKey],
         memory_objs: List[MemoryObj],
+        tot_size,
     ) -> Optional[List[Future]]:
         """
         Synchronously put the MemoryObjs into the local cpu backend.
