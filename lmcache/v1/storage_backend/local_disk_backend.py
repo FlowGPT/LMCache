@@ -124,7 +124,7 @@ class LocalDiskBackend(StorageBackendInterface):
             else:
                 return False
 
-    def remove(
+    async def remove(
         self,
         key: CacheEngineKey,
     ) -> None:
@@ -135,7 +135,8 @@ class LocalDiskBackend(StorageBackendInterface):
         size = os.path.getsize(path)
         self.usage -= size
         self.stats_monitor.update_local_storage_usage(self.usage)
-        os.remove(path)
+        #os.remove(path)
+        await aiofiles.remove(path)
 
         # push kv evict msg
         if self.lmcache_worker is not None:
@@ -183,7 +184,10 @@ class LocalDiskBackend(StorageBackendInterface):
         if len(evict_keys) > 0:
             logger.info("remove files")
         for evict_key in evict_keys:
-            self.remove(evict_key)
+            #self.remove(evict_key)
+            asyncio.run_coroutine_threadsafe(
+                self.remove(evict_key), self.loop
+            )
         if self.lookup_server is not None:
             self.lookup_server.batched_remove(evict_keys)
 
