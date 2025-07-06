@@ -216,7 +216,7 @@ class LMCacheEngine:
         logger.debug("total kv size: %d, total physical size: %d",  tot_kv_size, tot_phy_size)
 
         t = time.perf_counter()
-        self.storage_manager.batched_put(keys, memory_objs)
+        self.storage_manager.batched_put(keys, memory_objs, tot_kv_size)
         put_time += time.perf_counter() - t
 
         tot_time = offload_time + put_time
