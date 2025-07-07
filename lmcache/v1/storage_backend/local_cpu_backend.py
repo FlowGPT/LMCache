@@ -251,9 +251,12 @@ class LocalCPUBackend(StorageBackendInterface):
                 # might be used as buffers by other storage backends
                 if old_mem_obj.get_ref_count() > 1:
                     continue
-                evict_keys.append(evict_key)
+
+                if old_mem_obj.is_pinned:
+                    continue
 
                 old_mem_obj.ref_count_down()
+                evict_keys.append(evict_key)
                 logger.info(f"after evict, {evict_key.chunk_hash} size: {old_mem_obj.get_size()}")
                 memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
                 logger.debug("Evicting 1 chunk from cpu memory")
