@@ -399,6 +399,7 @@ class LMCacheEngine:
             # RDMA is another example.
             self.gpu_connector.to_gpu(memory_obj, start, end, **kwargs)
             memory_obj.ref_count_down()
+            logger.info(f"returned {key.chunk_hash} and ref_count: {memory_obj.get_ref_count()}")
 
             # NOTE (ApostaC): This is only for the current implementation:
             # When the object is retrieved back to vLLM, the storage backend

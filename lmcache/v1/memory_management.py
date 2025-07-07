@@ -610,7 +610,7 @@ class TensorMemoryAllocator(MemoryAllocatorInterface):
                 break
         else:
             logger.debug(
-                f"Failed to allocate memory for "
+                f"Failed to allocate memory for {aligned_size} explict_list {len(self.explicit_list)} "
                 f"tensor({shape}, {dtype}) because "
                 "no memory is available"
             )
@@ -618,6 +618,7 @@ class TensorMemoryAllocator(MemoryAllocatorInterface):
 
         # Do not add the block back if `block.size == aligned_size`
         self.explicit_list.remove(block)
+        logger.info(f"choose block size {block.size} and align size {aligned_size}")
         # Update the explicit list
         if block.size > aligned_size:
             self.explicit_list.add(

@@ -104,6 +104,7 @@ class LocalCPUBackend(StorageBackendInterface):
             if key in self.hot_cache:
                 old_memory_obj = self.hot_cache.pop(key)
                 old_memory_obj.ref_count_down()
+                logger.info(f"after pop, {key.chunk_hash} ref_count: {old_memory_obj.get_ref_count()}")
             self.hot_cache[key] = memory_obj
             memory_obj.ref_count_up()
 
@@ -198,6 +199,7 @@ class LocalCPUBackend(StorageBackendInterface):
             memory_obj = self.hot_cache.pop(key)
             if free_obj:
                 memory_obj.ref_count_down()
+                logger.info(f"after free, {key.chunk_hash} ref_count: {memory_obj.get_ref_count()}")
 
             self.usage -= memory_obj.get_size()
             self.stats_monitor.update_local_cache_usage(self.usage)
@@ -234,6 +236,7 @@ class LocalCPUBackend(StorageBackendInterface):
             else:
                 fmt = MemoryFormat.KV_2LTD
 
+        logger.info(f"current usgage {self.usage} and len {len(self.hot_cache)}")
         memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
         if memory_obj is not None or not eviction:
             return memory_obj
@@ -251,12 +254,14 @@ class LocalCPUBackend(StorageBackendInterface):
                 evict_keys.append(evict_key)
 
                 old_mem_obj.ref_count_down()
+                logger.info(f"after evict, {evict_key.chunk_hash} size: {old_mem_obj.get_size()}")
                 memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
                 logger.debug("Evicting 1 chunk from cpu memory")
                 if memory_obj is not None:
                     break
         for evict_key in evict_keys:
             self.remove(evict_key)
+        logger.info(f"evict len {len(evict_keys)}")
         if self.lookup_server is not None:
             self.lookup_server.batched_remove(evict_keys)
         return memory_obj
@@ -385,6 +390,7 @@ class LocalCPUBackend(StorageBackendInterface):
             if self.use_hot and key not in self.hot_cache:
                 self.hot_cache[key] = memory_obj
                 memory_obj.ref_count_up()
+                logger.info(f"write back {key.chunk_hash} and ref_count: {memory_obj.get_ref_count()}")
                 self.cpu_lock.release()
 
                 # Push kv msg
