@@ -84,7 +84,9 @@ class LMCacheLookupClient:
             bind=False,
         )
 
-    def lookup(self, token_ids: torch.Tensor) -> int:
+    def lookup(self, token_ids: torch.Tensor, vllm_cached_num:int) -> int:
+        self.socket.send(vllm_cached_num.to_bytes(4, "big"))
+        ack = self.socket.recv_string()
         request = self.encoder.encode(token_ids)
         self.socket.send_multipart(request, copy=False)
         resp = self.socket.recv()
@@ -120,9 +122,13 @@ class LMCacheLookupServer:
             while self.running:
                 # try:
                 # request = self.socket.recv()
+                msg = self.socket.recv()
+                vllm_cached_num = int.from_bytes(msg, byteorder='big')
+                logger.info("vllm cached num is %d", vllm_cached_num)
+                self.socket.send_string("ACK")
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
-                result = self.lmcache_engine.lookup(token_ids, pin=True)
+                result = self.lmcache_engine.lookup(token_ids, pin=True, vllm_cached_num=vllm_cached_num)
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
                 # except Exception as e:
@@ -504,9 +510,6 @@ class LMCacheConnectorV1Impl:
 
         self.layerwise_retrievers = []
         for idx, request in enumerate(metadata.requests):
-            if not self.use_layerwise:
-                self.lmcache_engine.unpin_all(request.token_ids)
-
             if request.load_spec is None:
                 continue
 
@@ -821,10 +824,10 @@ class LMCacheConnectorV1Impl:
 
         if self.skip_last_n_tokens > 0:
             num_external_hit_tokens = self.lookup_client.lookup(
-                token_ids[: -self.skip_last_n_tokens]
+                token_ids[: -self.skip_last_n_tokens],num_computed_tokens
             )
         else:
-            num_external_hit_tokens = self.lookup_client.lookup(token_ids)
+            num_external_hit_tokens = self.lookup_client.lookup(token_ids,num_computed_tokens)
 
         # When prompt length is divisible by the block size and all
         # blocks are cached, we need to recompute the last token.

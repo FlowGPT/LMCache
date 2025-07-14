@@ -418,12 +418,12 @@ class LMCacheEngine:
         )
         return ret_mask
 
-    def unpin_all(self,tokens: torch.Tensor):
-        keys=[]
-        for start, end, key in self.token_database.process_tokens(tokens, None):
-            keys.append(key)
-        self.storage_manager.batched_unpin(keys)
-        logger.info(f"unpinned {len(keys)} keys from the storage manager.")
+    # def unpin_all(self,tokens: torch.Tensor):
+    #     keys=[]
+    #     for start, end, key in self.token_database.process_tokens(tokens, None):
+    #         keys.append(key)
+    #     self.storage_manager.batched_unpin(keys)
+    #     logger.info(f"unpinned {len(keys)} keys from the storage manager.")
 
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
@@ -557,6 +557,7 @@ class LMCacheEngine:
         tokens: Union[torch.Tensor, List[int]],
         search_range: Optional[List[str]] = None,
         pin: bool = False,
+        vllm_cached_num: Optional[int] = None,
     ) -> int:
         """
         Checks the existence of KV cache of the tokens from the cache engine.
@@ -594,7 +595,11 @@ class LMCacheEngine:
                         return old_end
                 old_end = end
             else:
-                if self.storage_manager.contains(key, search_range, pin):
+                if vllm_cached_num and vllm_cached_num >=end:
+                    if self.storage_manager.contains(key,search_range, pin=False):
+                        old_end = end
+                        continue
+                elif self.storage_manager.contains(key, search_range, pin):
                     old_end = end
                     continue
 
