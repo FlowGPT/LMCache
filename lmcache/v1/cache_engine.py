@@ -418,6 +418,13 @@ class LMCacheEngine:
         )
         return ret_mask
 
+    def unpin_all(self,tokens: torch.Tensor):
+        keys=[]
+        for start, end, key in self.token_database.process_tokens(tokens, None):
+            keys.append(key)
+        self.storage_manager.batched_unpin(keys)
+        logger.info(f"unpinned {len(keys)} keys from the storage manager.")
+
     @_lmcache_nvtx_annotate
     @torch.inference_mode()
     def retrieve_layer(

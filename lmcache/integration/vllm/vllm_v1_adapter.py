@@ -504,6 +504,9 @@ class LMCacheConnectorV1Impl:
 
         self.layerwise_retrievers = []
         for idx, request in enumerate(metadata.requests):
+            if not self.use_layerwise:
+                self.lmcache_engine.unpin_all(request.token_ids)
+
             if request.load_spec is None:
                 continue
 

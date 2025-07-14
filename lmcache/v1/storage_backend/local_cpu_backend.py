@@ -199,7 +199,6 @@ class LocalCPUBackend(StorageBackendInterface):
             memory_obj = self.hot_cache.pop(key)
             if free_obj:
                 memory_obj.ref_count_down()
-                logger.info(f"after free, {key.chunk_hash} ref_count: {memory_obj.get_ref_count()}")
 
             self.usage -= memory_obj.get_size()
             self.stats_monitor.update_local_cache_usage(self.usage)
@@ -236,7 +235,7 @@ class LocalCPUBackend(StorageBackendInterface):
             else:
                 fmt = MemoryFormat.KV_2LTD
 
-        logger.info(f"current usgage {self.usage} and len {len(self.hot_cache)}")
+        logger.info(f"current usage {self.usage} and len {len(self.hot_cache)}")
         memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
         if memory_obj is not None or not eviction:
             return memory_obj
@@ -244,16 +243,24 @@ class LocalCPUBackend(StorageBackendInterface):
         assert isinstance(self.memory_allocator, MixedMemoryAllocator)
 
         evict_keys = []
+        ref_count_large_count=0
+        pin_count=0
         with self.cpu_lock:
             for evict_key in self.hot_cache:
                 old_mem_obj = self.hot_cache[evict_key]
                 # If the ref_count > 1, we cannot evict it as the cpu memory
                 # might be used as buffers by other storage backends
                 # Also, don't evict pinned objects
-                if old_mem_obj.get_ref_count() > 1 or old_mem_obj.is_pinned:
+                if old_mem_obj.get_ref_count() > 1:
+                    ref_count_large_count+=1
                     continue
-                evict_keys.append(evict_key)
+                if old_mem_obj.is_pinned:
+                    pin_count+=1
+                    continue
 
+                evict_keys.append(evict_key)
+                logger.info(f"ref count large count: {ref_count_large_count}, pin count: {pin_count}")
+                ref_count_large_count, pin_count = 0, 0
                 old_mem_obj.ref_count_down()
                 memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
                 logger.debug("Evicting 1 chunk from cpu memory")
