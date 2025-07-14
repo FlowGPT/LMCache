@@ -401,7 +401,6 @@ class LocalCPUBackend(StorageBackendInterface):
             if self.use_hot and key not in self.hot_cache:
                 self.hot_cache[key] = memory_obj
                 memory_obj.ref_count_up()
-                logger.info(f"write back {key.chunk_hash} and ref_count: {memory_obj.get_ref_count()}")
                 self.cpu_lock.release()
 
                 # Push kv msg

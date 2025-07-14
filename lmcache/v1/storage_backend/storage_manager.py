@@ -185,11 +185,9 @@ class StorageManager:
             # is done in the backend
             backend.batched_submit_put_task(keys, memory_objs)
 
-        logger.info("release put")
+        #logger.info("release put")
         for memory_obj in memory_objs:
             memory_obj.ref_count_down()
-        # for index, key in enumerate(keys):
-        #     logger.info(f"putted {key.chunk_hash} and ref_count: {memory_objs[index].get_ref_count()}")
 
     def get(self, key: CacheEngineKey) -> Optional[MemoryObj]:
         """
