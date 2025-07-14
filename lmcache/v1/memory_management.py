@@ -626,7 +626,7 @@ class TensorMemoryAllocator(MemoryAllocatorInterface):
 
         # Do not add the block back if `block.size == aligned_size`
         self.explicit_list.remove(block)
-        logger.info(f"choose block size {block.size} and align size {aligned_size}")
+        #logger.info(f"choose block size {block.size} and align size {aligned_size}")
         # Update the explicit list
         if block.size > aligned_size:
             self.explicit_list.add(

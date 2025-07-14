@@ -579,6 +579,7 @@ class LMCacheEngine:
         # secondary lookup on p2p (via lookup_server) if enabled
         search_p2p = self.enable_p2p and (search_range is None or "p2p" in search_range)
 
+        pinned_num=0
         for start, end, key in self.token_database.process_tokens(tokens):
             assert isinstance(key, CacheEngineKey)
 
@@ -601,6 +602,7 @@ class LMCacheEngine:
                         continue
                 elif self.storage_manager.contains(key, search_range, pin):
                     old_end = end
+                    pinned_num += 1
                     continue
 
                 if search_p2p:
@@ -608,9 +610,11 @@ class LMCacheEngine:
                     if self.lookup_server.lookup(key):
                         old_end = end
                         continue
+                logger.info(f"pinned_num {pinned_num}, part match")
                 return old_end
 
         # all tokens where found, return the maximal end
+        logger.info(f"pinned_num {pinned_num}, all match")
         return end
 
     @_lmcache_nvtx_annotate
