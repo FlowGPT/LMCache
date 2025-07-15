@@ -67,7 +67,9 @@ class LMCacheLookupClient(LookupClientInterface):
             bind=False,
         )
 
-    def lookup(self, token_ids: torch.Tensor) -> int:
+    def lookup(self, token_ids: torch.Tensor, vllm_cached_num:int) -> int:
+        self.socket.send(vllm_cached_num.to_bytes(4, "big"))
+        ack = self.socket.recv_string()
         request = self.encoder.encode(token_ids)
         self.socket.send_multipart(request, copy=False)
         resp = self.socket.recv()
@@ -105,9 +107,13 @@ class LMCacheLookupServer:
             while self.running:
                 # try:
                 # request = self.socket.recv()
+                msg = self.socket.recv()
+                vllm_cached_num = int.from_bytes(msg, byteorder='big')
+                logger.info("vllm cached num is %d", vllm_cached_num)
+                self.socket.send_string("ACK")
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
-                result = self.lmcache_engine.lookup(token_ids, pin=True)
+                result = self.lmcache_engine.lookup(token_ids, pin=True, vllm_cached_num=vllm_cached_num)
                 response = result.to_bytes(4, "big")
                 self.socket.send(response)
                 # except Exception as e:

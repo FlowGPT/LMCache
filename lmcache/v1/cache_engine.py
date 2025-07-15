@@ -607,6 +607,7 @@ class LMCacheEngine:
         tokens: Union[torch.Tensor, List[int]],
         search_range: Optional[List[str]] = None,
         pin: bool = False,
+        vllm_cached_num: Optional[int] = None
     ) -> int:
         """
         Checks the existence of KV cache of the tokens from the cache engine.
@@ -628,6 +629,7 @@ class LMCacheEngine:
         # secondary lookup on p2p (via lookup_server) if enabled
         search_p2p = self.enable_p2p and (search_range is None or "p2p" in search_range)
 
+        pinned_num=0
         for start, end, key in self.token_database.process_tokens(tokens):
             assert isinstance(key, CacheEngineKey)
 
@@ -644,8 +646,13 @@ class LMCacheEngine:
                         return old_end
                 old_end = end
             else:
-                if self.storage_manager.contains(key, search_range, pin):
+                if vllm_cached_num and vllm_cached_num >=end:
+                    if self.storage_manager.contains(key,search_range, pin=False):
+                        old_end = end
+                        continue
+                elif self.storage_manager.contains(key, search_range, pin):
                     old_end = end
+                    pinned_num += 1
                     continue
 
                 if search_p2p:
@@ -653,9 +660,11 @@ class LMCacheEngine:
                     if self.lookup_server.lookup(key):
                         old_end = end
                         continue
+                logger.info(f"pinned_num {pinned_num}, part match for vllm_cache_num {vllm_cached_num}")
                 return old_end
 
         # all tokens where found, return the maximal end
+        logger.info(f"pinned_num {pinned_num}, all match for vllm_cache_num {vllm_cached_num}")
         return end
 
     @_lmcache_nvtx_annotate

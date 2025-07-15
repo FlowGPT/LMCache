@@ -628,7 +628,7 @@ class TensorMemoryAllocator(MemoryAllocatorInterface):
                 break
         else:
             logger.debug(
-                f"Failed to allocate memory for "
+                f"Failed to allocate memory for {aligned_size} explict_list {len(self.explicit_list)} "
                 f"tensor({shape}, {dtype}) because "
                 "no memory is available"
             )

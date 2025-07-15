@@ -234,12 +234,15 @@ class LocalCPUBackend(StorageBackendInterface):
             else:
                 fmt = MemoryFormat.KV_2LTD
 
+        logger.info(f"current usage {self.usage} and len {len(self.hot_cache)}")
         memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
         if memory_obj is not None or not eviction:
             return memory_obj
 
         assert isinstance(self.memory_allocator, MixedMemoryAllocator)
 
+        ref_count_large_count=0
+        pin_count=0
         evict_keys = []
         with self.cpu_lock:
             for evict_key in self.hot_cache:
@@ -247,10 +250,16 @@ class LocalCPUBackend(StorageBackendInterface):
                 # If the ref_count > 1, we cannot evict it as the cpu memory
                 # might be used as buffers by other storage backends
                 # Also, don't evict pinned objects
-                if old_mem_obj.get_ref_count() > 1 or old_mem_obj.is_pinned:
+                if old_mem_obj.get_ref_count() > 1:
+                    ref_count_large_count+=1
                     continue
-                evict_keys.append(evict_key)
+                if old_mem_obj.is_pinned:
+                    pin_count+=1
+                    continue
 
+                evict_keys.append(evict_key)
+                logger.info(f"ref count large count: {ref_count_large_count}, pin count: {pin_count}")
+                ref_count_large_count, pin_count = 0, 0
                 old_mem_obj.ref_count_down()
                 memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)
                 logger.debug("Evicting 1 chunk from cpu memory")

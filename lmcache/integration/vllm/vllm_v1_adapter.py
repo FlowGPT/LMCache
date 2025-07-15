@@ -721,10 +721,10 @@ class LMCacheConnectorV1Impl:
 
         if self.skip_last_n_tokens > 0:
             num_external_hit_tokens = self.lookup_client.lookup(
-                token_ids[: -self.skip_last_n_tokens]
+                token_ids[: -self.skip_last_n_tokens],num_computed_tokens
             )
         else:
-            num_external_hit_tokens = self.lookup_client.lookup(token_ids)
+            num_external_hit_tokens = self.lookup_client.lookup(token_ids,num_computed_tokens)
 
         # When prompt length is divisible by the block size and all
         # blocks are cached, we need to recompute the last token.
