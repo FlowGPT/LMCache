@@ -259,7 +259,7 @@ class LocalCPUBackend(StorageBackendInterface):
                     continue
 
                 evict_keys.append(evict_key)
-                logger.info(f"ref count large count: {ref_count_large_count}, pin count: {pin_count}")
+                logger.debug(f"ref count large count: {ref_count_large_count}, pin count: {pin_count}")
                 ref_count_large_count, pin_count = 0, 0
                 old_mem_obj.ref_count_down()
                 memory_obj = self.memory_allocator.allocate(shape, dtype, fmt)

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import threading
 
 # Third Party
+from pytest import skip
 from vllm.config import VllmConfig
 from vllm.distributed.kv_transfer.kv_connector.v1.base import (
     KVConnectorBase_V1,
@@ -30,6 +31,7 @@ from vllm.v1.serial_utils import MsgpackDecoder, MsgpackEncoder
 import torch
 import vllm.envs as envs
 import zmq
+import os
 
 # First Party
 from lmcache.integration.vllm.utils import (
@@ -124,7 +126,7 @@ class LMCacheLookupServer:
                 # request = self.socket.recv()
                 msg = self.socket.recv()
                 vllm_cached_num = int.from_bytes(msg, byteorder='big')
-                logger.info("vllm cached num is %d", vllm_cached_num)
+                #logger.info("vllm cached num is %d", vllm_cached_num)
                 self.socket.send_string("ACK")
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)
@@ -268,6 +270,7 @@ class ReqMeta:
         load_spec: Optional[LoadSpec] = None,
         skip_save: bool = False,
         discard_partial_chunks: bool = True,
+        store_length_limit: int = None,
     ) -> Optional["ReqMeta"]:
         """Create the request metadata from a request tracker.
 
@@ -296,6 +299,10 @@ class ReqMeta:
         skip_save = skip_save or (
             tracker.num_saved_tokens > 0 and input_token_len < chunk_boundary
         )
+
+        if not skip_save and store_length_limit and input_token_len > store_length_limit:
+            logger.debug(f"Skipping save for {input_token_len} tokens")
+            skip_save = True
 
         if skip_save and load_spec is None:
             return None
@@ -840,9 +847,10 @@ class LMCacheConnectorV1Impl:
             need_to_allocate -= 1
 
         logger.info(
-            "Reqid: %s, Total tokens %d, LMCache hit tokens: %d, need to load: %d",
+            "Reqid: %s, Total tokens %d, VLLM cached tokens: %d, LMCache hit tokens: %d, need to load: %d",
             request.request_id,
             request.num_tokens,
+            num_computed_tokens,
             num_external_hit_tokens,
             need_to_allocate,
         )
@@ -912,6 +920,8 @@ class LMCacheConnectorV1Impl:
             scheduler_output (SchedulerOutput): the scheduler output object.
         """
 
+        store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
+
         force_skip_save = self.kv_role == "kv_consumer"
 
         meta = LMCacheConnectorMetadata()
@@ -943,6 +953,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=load_spec,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
+                store_length_limit= store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)
@@ -958,6 +969,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=None,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
+                store_length_limit= store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)
