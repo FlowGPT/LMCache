@@ -109,7 +109,7 @@ class LMCacheLookupServer:
                 # request = self.socket.recv()
                 msg = self.socket.recv()
                 vllm_cached_num = int.from_bytes(msg, byteorder='big')
-                logger.info("vllm cached num is %d", vllm_cached_num)
+                #logger.info("vllm cached num is %d", vllm_cached_num)
                 self.socket.send_string("ACK")
                 frames = self.socket.recv_multipart(copy=False)
                 token_ids = self.decoder.decode(frames)

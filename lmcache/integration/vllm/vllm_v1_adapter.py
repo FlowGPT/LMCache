@@ -26,6 +26,7 @@ from vllm.distributed.kv_transfer.kv_connector.v1.base import (
 from vllm.utils import cdiv
 from vllm.v1.core.sched.output import SchedulerOutput
 import torch
+import os
 
 # First Party
 from lmcache.integration.vllm.utils import (
@@ -176,6 +177,7 @@ class ReqMeta:
         load_spec: Optional[LoadSpec] = None,
         skip_save: bool = False,
         discard_partial_chunks: bool = True,
+        store_length_limit: int = None
     ) -> Optional["ReqMeta"]:
         """Create the request metadata from a request tracker.
 
@@ -204,6 +206,10 @@ class ReqMeta:
         skip_save = skip_save or (
             tracker.num_saved_tokens > 0 and input_token_len < chunk_boundary
         )
+
+        if not skip_save and store_length_limit and input_token_len > store_length_limit:
+            logger.debug(f"Skipping save for {input_token_len} tokens")
+            skip_save = True
 
         if skip_save and load_spec is None:
             return None
@@ -365,6 +371,14 @@ class LMCacheConnectorV1Impl:
             vllm_config.parallel_config
         )
         self.current_layer = 0
+
+        store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
+        if store_limit:
+            self.store_limit = int(store_limit)
+            logger.info(f"STORE_LIMIT_LMCACHE {self.store_limit}")
+        else:
+            self.store_limit = None
+
 
     def _init_kv_caches_from_forward_context(self, forward_context: "ForwardContext"):
         for layer_name in forward_context.no_compile_layers:
@@ -737,9 +751,10 @@ class LMCacheConnectorV1Impl:
             need_to_allocate -= 1
 
         logger.info(
-            "Reqid: %s, Total tokens %d, LMCache hit tokens: %d, need to load: %d",
+            "Reqid: %s, Total tokens %d, VLLM cached tokens: %d, LMCache hit tokens: %d, need to load: %d",
             request.request_id,
             request.num_tokens,
+            num_computed_tokens,
             num_external_hit_tokens,
             need_to_allocate,
         )
@@ -842,6 +857,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=load_spec,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
+                store_length_limit= self.store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)
@@ -863,6 +879,7 @@ class LMCacheConnectorV1Impl:
                     load_spec=None,
                     skip_save=force_skip_save,
                     discard_partial_chunks=self._discard_partial_chunks,
+                    store_length_limit= self.store_limit
                 )
                 if req_meta is not None:
                     meta.add_request(req_meta)
@@ -892,6 +909,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=None,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
+                store_length_limit= self.store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)

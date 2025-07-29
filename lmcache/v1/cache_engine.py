@@ -660,11 +660,11 @@ class LMCacheEngine:
                     if self.lookup_server.lookup(key):
                         old_end = end
                         continue
-                logger.info(f"pinned_num {pinned_num}, part match for vllm_cache_num {vllm_cached_num}")
+                logger.debug(f"pinned_num {pinned_num}, part match for vllm_cache_num {vllm_cached_num}")
                 return old_end
 
         # all tokens where found, return the maximal end
-        logger.info(f"pinned_num {pinned_num}, all match for vllm_cache_num {vllm_cached_num}")
+        logger.debug(f"pinned_num {pinned_num}, all match for vllm_cache_num {vllm_cached_num}")
         return end
 
     @_lmcache_nvtx_annotate
