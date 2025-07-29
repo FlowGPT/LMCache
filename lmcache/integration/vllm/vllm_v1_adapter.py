@@ -465,6 +465,7 @@ class LMCacheConnectorV1Impl:
         store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
         if store_limit:
             self.store_limit = int(store_limit)
+            logger.info(f"STORE_LIMIT_LMCACHE {self.store_limit}")
         else:
             self.store_limit = None
 
