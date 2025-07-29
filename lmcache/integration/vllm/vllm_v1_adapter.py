@@ -921,6 +921,8 @@ class LMCacheConnectorV1Impl:
         """
 
         store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
+        if store_limit:
+            store_limit = int(store_limit)
 
         force_skip_save = self.kv_role == "kv_consumer"
 
