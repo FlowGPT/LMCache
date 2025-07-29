@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Optional
 import threading
 
 # Third Party
-from pytest import skip
 from vllm.config import VllmConfig
 from vllm.distributed.kv_transfer.kv_connector.v1.base import (
     KVConnectorBase_V1,
