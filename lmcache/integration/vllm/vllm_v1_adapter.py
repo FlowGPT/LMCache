@@ -462,6 +462,12 @@ class LMCacheConnectorV1Impl:
         )
         self.current_layer = 0
 
+        store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
+        if store_limit:
+            self.store_limit = int(self.store_limit)
+        else:
+            self.store_limit = None
+
     def _init_kv_caches_from_forward_context(self, forward_context: "ForwardContext"):
         for layer_name in forward_context.no_compile_layers:
             attn_layer = forward_context.no_compile_layers[layer_name]
@@ -919,10 +925,6 @@ class LMCacheConnectorV1Impl:
             scheduler_output (SchedulerOutput): the scheduler output object.
         """
 
-        store_limit = os.getenv("STORE_LIMIT_LMCACHE",None)
-        if store_limit:
-            store_limit = int(store_limit)
-
         force_skip_save = self.kv_role == "kv_consumer"
 
         meta = LMCacheConnectorMetadata()
@@ -954,7 +956,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=load_spec,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
-                store_length_limit= store_limit
+                store_length_limit= self.store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)
@@ -970,7 +972,7 @@ class LMCacheConnectorV1Impl:
                 load_spec=None,
                 skip_save=force_skip_save,
                 discard_partial_chunks=self._discard_partial_chunks,
-                store_length_limit= store_limit
+                store_length_limit= self.store_limit
             )
             if req_meta is not None:
                 meta.add_request(req_meta)
